@@ -17,4 +17,10 @@ router.patch(
   UserController.updateMyProfile,
 );
 
+router.get(
+  '/dashboard-stats',
+  requireAuth(Role.USER, Role.ADMIN, Role.TRAVEL_AGENT),
+  UserController.getDashboardStats,
+);
+
 export const UserRoutes = router;

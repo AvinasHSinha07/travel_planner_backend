@@ -1,5 +1,6 @@
 import { Role, TripStatus, BookingType, BookingStatus, TravelStyle, NotificationType, AccommodationType } from '@prisma/client';
 import { prisma } from '../src/app/lib/prisma';
+import bcrypt from 'bcrypt';
 
 async function main() {
   console.log('🌱 Seeding database...');
@@ -12,19 +13,73 @@ async function main() {
   await prisma.accommodation.deleteMany();
   await prisma.trip.deleteMany();
   await prisma.destination.deleteMany();
+  await prisma.session.deleteMany();
+  await prisma.account.deleteMany();
   await prisma.user.deleteMany();
 
+  const saltRounds = 10;
+
   // 1. Create Admin User
+  const adminPassword = await bcrypt.hash('admin123', saltRounds);
   const admin = await prisma.user.create({
     data: {
-      email: 'admin@planora.com',
+      email: 'admin@travelplanner.com',
       name: 'Planora Admin',
       role: Role.ADMIN,
       emailVerified: true,
     },
   });
 
-  // 2. Create Sample Destinations
+  await prisma.account.create({
+    data: {
+      userId: admin.id,
+      accountId: 'admin@travelplanner.com',
+      providerId: 'email',
+      password: adminPassword,
+    },
+  });
+
+  // 2. Create Travel Agent
+  const agentPassword = await bcrypt.hash('agent123', saltRounds);
+  const agent = await prisma.user.create({
+    data: {
+      email: 'agent@travelplanner.com',
+      name: 'Planora Agent',
+      role: Role.TRAVEL_AGENT,
+      emailVerified: true,
+    },
+  });
+
+  await prisma.account.create({
+    data: {
+      userId: agent.id,
+      accountId: 'agent@travelplanner.com',
+      providerId: 'email',
+      password: agentPassword,
+    },
+  });
+
+  // 3. Create Regular User
+  const userPassword = await bcrypt.hash('user123', saltRounds);
+  const user = await prisma.user.create({
+    data: {
+      email: 'user@travelplanner.com',
+      name: 'Planora Traveler',
+      role: Role.USER,
+      emailVerified: true,
+    },
+  });
+
+  await prisma.account.create({
+    data: {
+      userId: user.id,
+      accountId: 'user@travelplanner.com',
+      providerId: 'email',
+      password: userPassword,
+    },
+  });
+
+  // 4. Create Sample Destinations
   const maldives = await prisma.destination.create({
     data: {
       name: 'Maldives',
@@ -55,7 +110,7 @@ async function main() {
     },
   });
 
-  // 3. Create Activities
+  // 5. Create Activities
   await prisma.activity.create({
     data: {
       destinationId: maldives.id,
@@ -67,7 +122,7 @@ async function main() {
     },
   });
 
-  // 4. Create Accommodations
+  // 6. Create Accommodations
   await prisma.accommodation.create({
     data: {
       destinationId: tokyo.id,

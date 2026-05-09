@@ -13,6 +13,7 @@ model User {
   email            String            @unique
   name             String
   role             Role              @default(USER)
+  image            String?
   avatar           String?
   phone            String?
   createdAt        DateTime          @default(now())
@@ -57,6 +58,7 @@ model Account {
   refreshTokenExpiresAt DateTime?
   scope                 String?
   idToken               String?
+  password              String?
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 

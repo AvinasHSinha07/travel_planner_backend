@@ -4,11 +4,12 @@ import { auth } from '../lib/auth';
 import AppError from '../errorHelpers/AppError';
 import catchAsync from '../utils/catchAsync';
 import { Role } from '@prisma/client';
+import { fromNodeHeaders } from 'better-auth/node';
 
 const requireAuth = (...requiredRoles: Role[]) => {
   return catchAsync(async (req: Request, res: Response, next: NextFunction) => {
     const session = await auth.api.getSession({
-        headers: req.headers as any
+        headers: fromNodeHeaders(req.headers)
     });
 
     if (!session) {

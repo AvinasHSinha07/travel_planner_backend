@@ -27,7 +27,21 @@ const updateMyProfile = catchAsync(async (req, res) => {
   });
 });
 
+const getDashboardStats = catchAsync(async (req, res) => {
+  const userId = req.user?.id as string;
+  const role = req.user?.role as string;
+  const result = await UserService.getDashboardStatsFromDB(userId, role);
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: 'Dashboard statistics retrieved successfully',
+    data: result,
+  });
+});
+
 export const UserController = {
   getMyProfile,
   updateMyProfile,
+  getDashboardStats,
 };
