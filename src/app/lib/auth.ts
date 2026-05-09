@@ -3,7 +3,6 @@ import { prismaAdapter } from "better-auth/adapters/prisma";
 import { bearer } from "better-auth/plugins";
 import { prisma } from "./prisma";
 import { env } from "../config/env";
-import bcrypt from "bcrypt";
 
 // Define roles for the application
 const Role = {
@@ -15,12 +14,18 @@ const Role = {
 const isProduction = env.NODE_ENV === "production";
 const cleanURL = (url: string | undefined) => url?.trim().replace(/\/$/, "") || "";
 
-// Session configuration
-const sessionExpiresIn = 60 * 60 * 24; // 1 day
-const sessionUpdateAge = 60 * 60 * 12; // 12 hours
+// Session configuration from env (matching planora)
+const sessionExpiresIn = Number.isFinite(parseInt(process.env.BETTER_AUTH_SESSION_TOKEN_EXPIRES_IN || ''))
+    ? parseInt(process.env.BETTER_AUTH_SESSION_TOKEN_EXPIRES_IN as string)
+    : 60 * 60 * 24; // 1 day default
+
+const sessionUpdateAge = Number.isFinite(parseInt(process.env.BETTER_AUTH_SESSION_TOKEN_UPDATE_AGE || ''))
+    ? parseInt(process.env.BETTER_AUTH_SESSION_TOKEN_UPDATE_AGE as string)
+    : 60 * 60 * 12; // 12 hours default
 
 export const auth = betterAuth({
-    baseURL: cleanURL(isProduction ? env.CLIENT_URL?.split(',')[0] : "http://localhost:3000"),
+    // Public origin browsers use to reach /api/v1/auth (Next rewrites or direct API). Prefer CLIENT_URL.
+    baseURL: cleanURL(env.CLIENT_URL?.split(',')[0] || env.BETTER_AUTH_URL),
     basePath: "/api/v1/auth",
     secret: env.BETTER_AUTH_SECRET,
     account: {
@@ -34,14 +39,6 @@ export const auth = betterAuth({
     emailAndPassword: {
         enabled: true,
         requireEmailVerification: false,
-        password: {
-            hash: async (password) => {
-                return await bcrypt.hash(password, 10);
-            },
-            verify: async ({ password, hash }) => {
-                return await bcrypt.compare(password, hash);
-            },
-        },
         sendResetPassword: async ({ user, url, token }, request) => {
             console.log(`[AUTH] Password reset link for ${user.email}: ${url}`);
             // TODO: Implement email sending via BullMQ
@@ -69,7 +66,8 @@ export const auth = betterAuth({
                 type: "string",
                 required: true,
                 defaultValue: Role.USER,
-                input: false, // Prevent users from setting role directly during signup
+                // Allowed values are enforced in app.ts for sign-up (USER / TRAVEL_AGENT only; ADMIN blocked).
+                input: true,
             },
             avatar: {
                 type: "string",
@@ -103,6 +101,8 @@ export const auth = betterAuth({
     ].filter(Boolean),
     advanced: {
         defaultCookieAttributes: {
+            // Same-origin app (Next :3000 → /api/v1 → backend): "lax" works and avoids browsers rejecting SameSite=None without Secure.
+            // Production cross-subdomain setups can switch to "none" + secure cookies if needed.
             sameSite: isProduction ? "none" : "lax",
             secure: isProduction,
             httpOnly: true,
@@ -112,6 +112,7 @@ export const auth = betterAuth({
         crossSubDomainCookies: {
             enabled: false,
         },
+        disableCSRFCheck: !isProduction,
     },
 });
 

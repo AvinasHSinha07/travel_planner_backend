@@ -1,7 +1,9 @@
 import express from 'express';
 import { Role } from '@prisma/client';
 import requireAuth from '../../middleware/auth';
+import validateRequest from '../../middleware/validateRequest';
 import { AIController } from './ai.controller';
+import { AIValidation } from './ai.validation';
 
 const router = express.Router();
 
@@ -33,6 +35,7 @@ router.post(
 router.post(
   '/analyze',
   requireAuth(Role.ADMIN, Role.TRAVEL_AGENT),
+  validateRequest(AIValidation.analyzeSchema),
   AIController.analyzeData,
 );
 
@@ -49,6 +52,7 @@ router.post(
 router.post(
   '/caption',
   requireAuth(Role.USER, Role.ADMIN, Role.TRAVEL_AGENT),
+  validateRequest(AIValidation.captionSchema),
   AIController.captionImage,
 );
 

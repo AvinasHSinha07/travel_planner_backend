@@ -35,7 +35,9 @@ export const CacheKeys = {
   itinerary: (tripId: string) => `travelplanner:itinerary:${tripId}`,
   ai: {
     itinerary: (hash: string) => `travelplanner:ai:itinerary:${hash}`,
-    recommendations: (userId: string) => `travelplanner:ai:recommendations:${userId}`,
+    /** Preference-aware cache: same user, different prefs → different key */
+    recommendations: (userId: string, prefHash: string) =>
+      `travelplanner:ai:recommendations:${userId}:${prefHash}`,
     chat: (sessionId: string) => `travelplanner:ai:chat:${sessionId}`,
     analysis: (dataset: string) => `travelplanner:ai:analysis:${dataset}`,
   },
@@ -113,6 +115,14 @@ export const cache = {
     await this.delete(CacheKeys.user.preferences(userId));
     await this.delete(CacheKeys.bookings.byUser(userId));
     await this.invalidateTrips(userId);
+  },
+
+  async invalidateTripItineraryAi(tripId: string): Promise<void> {
+    await this.delete(CacheKeys.itinerary(tripId));
+  },
+
+  async invalidateAiRecommendationsForUser(userId: string): Promise<void> {
+    await this.deletePattern(`travelplanner:ai:recommendations:${userId}:*`);
   },
 };
 

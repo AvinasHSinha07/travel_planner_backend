@@ -1,6 +1,8 @@
+import * as Sentry from '@sentry/node';
 import { NextFunction, Request, Response } from 'express';
 import { ZodError } from 'zod';
 import { env } from '../config/env';
+import AppError from '../errorHelpers/AppError';
 
 const globalErrorHandler = (
   err: any,
@@ -17,6 +19,10 @@ const globalErrorHandler = (
     },
   ];
 
+  if (env.SENTRY_DSN && statusCode >= 500) {
+    Sentry.captureException(err);
+  }
+
   if (err instanceof ZodError) {
     statusCode = 400;
     message = 'Validation Error';
@@ -24,10 +30,19 @@ const globalErrorHandler = (
       path: issue.path[issue.path.length - 1] as string,
       message: issue.message,
     }));
+  } else if (err instanceof AppError) {
+    statusCode = err.statusCode;
+    message = err.message;
+    errorSources = [{ path: '', message: err.message }];
   } else if (err.name === 'PrismaClientKnownRequestError') {
-     // Handle Prisma specific errors if needed
-     statusCode = 400;
-     message = 'Database Error';
+    const code = (err as { code?: string }).code;
+    if (code === 'P2002') {
+      statusCode = 409;
+      message = 'A record with this value already exists';
+    } else {
+      statusCode = 400;
+      message = 'Database Error';
+    }
   }
 
   return res.status(statusCode).json({

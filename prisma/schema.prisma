@@ -19,6 +19,7 @@ model User {
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
   emailVerified    Boolean           @default(false)
+  isSuspended      Boolean           @default(false)
   
   sessions         Session[]
   accounts         Account[]
@@ -28,6 +29,7 @@ model User {
   reviews          Review[]
   notifications    Notification[]
   preferences      TravelPreference?
+  savedDestinations SavedDestination[]
 
   @@map("user")
 }
@@ -104,8 +106,22 @@ model Destination {
   reviews        Review[]
   trips          Trip[]
   stats          DestinationStats?
+  savedBy        SavedDestination[]
 
   @@map("destination")
+}
+
+model SavedDestination {
+  id            String   @id @default(uuid())
+  userId        String
+  destinationId String
+  createdAt     DateTime @default(now())
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  destination Destination @relation(fields: [destinationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, destinationId])
+  @@map("saved_destination")
 }
 
 model Trip {
@@ -118,6 +134,7 @@ model Trip {
   status         TripStatus      @default(DRAFT)
   totalBudget    Float
   travelerCount  Int             @default(1)
+  galleryImages  String[]        @default([])
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
 
@@ -218,6 +235,7 @@ model Review {
   user           User        @relation(fields: [userId], references: [id])
   destination    Destination @relation(fields: [destinationId], references: [id], onDelete: Cascade)
 
+  @@unique([userId, destinationId])
   @@map("review")
 }
 

@@ -8,16 +8,18 @@ const createReview = catchAsync(async (req, res) => {
   const result = await ReviewService.createReviewIntoDB(userId, req.body);
 
   sendResponse(res, {
-    statusCode: httpStatus.CREATED,
+    statusCode: httpStatus.OK,
     success: true,
-    message: 'Review created successfully',
+    message: 'Review saved successfully',
     data: result,
   });
 });
 
 const getDestinationReviews = catchAsync(async (req, res) => {
   const { destinationId } = req.params;
-  const result = await ReviewService.getDestinationReviewsFromDB(destinationId as string);
+  const page = Number(req.query.page) || 1;
+  const limit = Number(req.query.limit) || 20;
+  const result = await ReviewService.getDestinationReviewsFromDB(destinationId as string, page, limit);
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
@@ -27,7 +29,42 @@ const getDestinationReviews = catchAsync(async (req, res) => {
   });
 });
 
+const adminListReviews = catchAsync(async (req, res) => {
+  const page = Number(req.query.page) || 1;
+  const limit = Number(req.query.limit) || 25;
+  const destinationId = req.query.destinationId as string | undefined;
+  const search = req.query.search as string | undefined;
+
+  const result = await ReviewService.listAllReviewsForAdminFromDB({
+    page,
+    limit,
+    destinationId,
+    search,
+  });
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: 'Reviews retrieved successfully',
+    data: result,
+  });
+});
+
+const deleteReview = catchAsync(async (req, res) => {
+  const { reviewId } = req.params;
+  const result = await ReviewService.deleteReviewByIdFromDB(reviewId as string);
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: 'Review deleted',
+    data: result,
+  });
+});
+
 export const ReviewController = {
   createReview,
+  adminListReviews,
   getDestinationReviews,
+  deleteReview,
 };

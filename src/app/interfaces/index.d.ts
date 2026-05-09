@@ -9,6 +9,7 @@ declare global {
         role: Role;
         name: string;
       };
+      file?: Express.Multer.File;
     }
   }
 }

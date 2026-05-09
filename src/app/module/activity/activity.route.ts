@@ -7,6 +7,13 @@ import { ActivityValidation } from './activity.validation';
 
 const router = express.Router();
 
+router.get(
+  '/',
+  requireAuth(Role.ADMIN, Role.TRAVEL_AGENT),
+  validateRequest(ActivityValidation.listActivitiesQuerySchema),
+  ActivityController.listActivities,
+);
+
 router.post(
   '/',
   requireAuth(Role.ADMIN, Role.TRAVEL_AGENT),
@@ -14,6 +21,24 @@ router.post(
   ActivityController.createActivity,
 );
 
-router.get('/:destinationId', ActivityController.getDestinationActivities);
+router.get(
+  '/by-destination/:destinationId',
+  validateRequest(ActivityValidation.byDestinationParamsSchema),
+  ActivityController.getDestinationActivities,
+);
+
+router.patch(
+  '/:id',
+  requireAuth(Role.ADMIN, Role.TRAVEL_AGENT),
+  validateRequest(ActivityValidation.updateActivitySchema),
+  ActivityController.updateActivity,
+);
+
+router.delete(
+  '/:id',
+  requireAuth(Role.ADMIN, Role.TRAVEL_AGENT),
+  validateRequest(ActivityValidation.deleteActivitySchema),
+  ActivityController.deleteActivity,
+);
 
 export const ActivityRoutes = router;

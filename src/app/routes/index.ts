@@ -9,8 +9,14 @@ import { AccommodationRoutes } from '../module/accommodation/accommodation.route
 import { AIRoutes } from '../module/ai/ai.route';
 import { NotificationRoutes } from '../module/notification/notification.route';
 import { TravelPreferenceRoutes } from '../module/travelPreference/travelPreference.route';
+import { SavedDestinationRoutes } from '../module/savedDestination/savedDestination.route';
+import { AnalyticsRoutes } from '../module/analytics/analytics.route';
+import { UploadRoutes } from '../module/upload/upload.route';
+import { aiRouteLimiter } from '../middleware/rateLimiters';
 
 const router = Router();
+
+router.use('/ai', aiRouteLimiter);
 
 const moduleRoutes = [
   {
@@ -52,6 +58,18 @@ const moduleRoutes = [
   {
     path: '/preference',
     route: TravelPreferenceRoutes,
+  },
+  {
+    path: '/saved-destinations',
+    route: SavedDestinationRoutes,
+  },
+  {
+    path: '/analytics',
+    route: AnalyticsRoutes,
+  },
+  {
+    path: '/upload',
+    route: UploadRoutes,
   },
 ];
 

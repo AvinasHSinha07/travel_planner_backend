@@ -1,4 +1,5 @@
 import { prisma } from '../../lib/prisma';
+import { cache } from '../../lib/redis';
 
 const updateMyPreferencesInDB = async (userId: string, payload: any) => {
   const result = await prisma.travelPreference.upsert({
@@ -9,6 +10,7 @@ const updateMyPreferencesInDB = async (userId: string, payload: any) => {
       userId,
     },
   });
+  await cache.invalidateAiRecommendationsForUser(userId);
   return result;
 };
 

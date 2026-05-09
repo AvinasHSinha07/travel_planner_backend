@@ -1,12 +1,17 @@
-import { 
-  callGeminiWithFallback, 
-  extractJSONFromResponse, 
-  geminiVisionModel 
+import { createHash } from 'node:crypto';
+import type { Response } from 'express';
+import { Role } from '@prisma/client';
+import httpStatus from 'http-status';
+import {
+  callGeminiWithFallback,
+  extractJSONFromResponse,
+  geminiModel,
+  captionTravelImageWithGemini,
 } from '../../utils/gemini';
 import { prisma } from '../../lib/prisma';
 import { cache, CacheKeys, CacheTTL } from '../../lib/redis';
 import { queueJobs } from '../../lib/queue';
-import crypto from 'crypto';
+import AppError from '../../errorHelpers/AppError';
 
 // ============================================================================
 // Feature 1: AI Trip Itinerary Generator
@@ -23,23 +28,23 @@ interface ItineraryInput {
   dietaryRestrictions?: string[];
 }
 
-const generateItinerary = async (tripId: string) => {
-  // Check cache first
-  const cacheKey = CacheKeys.itinerary(tripId);
-  const cached = await cache.get(cacheKey);
-  if (cached) return cached;
-
+const generateItinerary = async (tripId: string, requesterId: string, requesterRole: Role) => {
   const trip = await prisma.trip.findUnique({
     where: { id: tripId },
     include: {
       destination: true,
       user: {
-        include: { preferences: true }
-      }
+        include: { preferences: true },
+      },
     },
   });
 
-  if (!trip) throw new Error('Trip not found');
+  if (!trip) {
+    throw new AppError(httpStatus.NOT_FOUND, 'Trip not found');
+  }
+  if (requesterRole !== Role.ADMIN && trip.userId !== requesterId) {
+    throw new AppError(httpStatus.FORBIDDEN, 'You cannot generate an itinerary for this trip');
+  }
 
   const { destination, user, startDate, endDate, totalBudget, travelerCount } = trip;
   const preferences = user.preferences;
@@ -77,10 +82,11 @@ const generateItinerary = async (tripId: string) => {
     - Consider the travel style: ${preferences?.travelStyle || 'balanced'}
   `;
 
-  // Check if we should queue this (large prompt)
-  if (prompt.length > 800) {
+  /** Long trips / very large prompts go async so the API stays responsive */
+  const shouldQueue = days > 5 || prompt.length > 12_000;
+  if (shouldQueue) {
     const job = await queueJobs.generateItinerary(tripId, trip.userId, prompt);
-    return { status: 'queued', jobId: job.id, message: 'Itinerary generation queued due to complexity' };
+    return { status: 'queued', jobId: job.id, message: 'Itinerary generation queued' };
   }
 
   try {
@@ -105,13 +111,13 @@ const generateItinerary = async (tripId: string) => {
       })),
     });
 
-    // Cache the result
-    await cache.set(cacheKey, itineraryData, CacheTTL.AI_RESULTS);
-
     return itineraryData;
   } catch (error) {
     console.error('AI Itinerary generation failed:', error);
-    throw new Error('Failed to generate itinerary. Please try again or plan manually.');
+    throw new AppError(
+      httpStatus.SERVICE_UNAVAILABLE,
+      'AI itinerary is temporarily unavailable. Please try again in a few minutes or add activities manually.',
+    );
   }
 };
 
@@ -128,18 +134,34 @@ interface Recommendation {
   estimatedCostPerDay: number;
 }
 
-const getRecommendations = async (userId: string): Promise<Recommendation[]> => {
-  // Check cache
-  const cacheKey = CacheKeys.ai.recommendations(userId);
-  const cached = await cache.get<Recommendation[]>(cacheKey);
-  if (cached) return cached;
+const normalizeRecommendations = (raw: unknown): Recommendation[] => {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((r: Record<string, unknown>) => {
+      let matchScore = Number(r.matchScore ?? 0);
+      if (matchScore > 0 && matchScore <= 1) {
+        matchScore = Math.round(matchScore * 100);
+      }
+      if (Number.isNaN(matchScore)) matchScore = 0;
+      matchScore = Math.min(100, Math.max(0, Math.round(matchScore)));
+      return {
+        destinationId: String(r.destinationId ?? ''),
+        name: String(r.name ?? ''),
+        country: String(r.country ?? ''),
+        matchScore,
+        reason: String(r.reason ?? ''),
+        bestTimeToVisit: String(r.bestTimeToVisit ?? ''),
+        estimatedCostPerDay: Number(r.estimatedCostPerDay ?? 0),
+      };
+    })
+    .filter((r) => r.destinationId.length > 0 && r.name.length > 0);
+};
 
-  // Get user preferences
+const getRecommendations = async (userId: string): Promise<Recommendation[]> => {
   const preferences = await prisma.travelPreference.findUnique({
     where: { userId },
   });
 
-  // Get user's travel history
   const userTrips = await prisma.trip.findMany({
     where: { userId },
     include: { destination: true },
@@ -147,9 +169,26 @@ const getRecommendations = async (userId: string): Promise<Recommendation[]> => 
     orderBy: { createdAt: 'desc' },
   });
 
-  const visitedDestinations = userTrips.map(t => t.destination.name);
+  const visitedDestinations = userTrips.map((t) => t.destination.name);
 
-  // Query potential destinations based on preferences
+  const prefPayload = {
+    interests: preferences?.interests ?? [],
+    budgetRange: preferences?.budgetRange ?? null,
+    travelStyle: preferences?.travelStyle ?? null,
+    dietaryRestrictions: preferences?.dietaryRestrictions ?? [],
+    preferredClimate: preferences?.preferredClimate ?? null,
+    mobilityNeeds: preferences?.mobilityNeeds ?? null,
+    visited: [...visitedDestinations].sort(),
+  };
+  const prefHash = createHash('sha256')
+    .update(JSON.stringify(prefPayload))
+    .digest('hex')
+    .slice(0, 16);
+
+  const cacheKey = CacheKeys.ai.recommendations(userId, prefHash);
+  const cached = await cache.get<Recommendation[]>(cacheKey);
+  if (cached?.length) return normalizeRecommendations(cached);
+
   const destinations = await prisma.destination.findMany({
     where: {
       name: { notIn: visitedDestinations },
@@ -204,24 +243,33 @@ const getRecommendations = async (userId: string): Promise<Recommendation[]> => 
 
   try {
     const text = await callGeminiWithFallback(prompt);
-    const recommendations = extractJSONFromResponse(text);
-    
-    // Cache for 30 minutes
-    await cache.set(cacheKey, recommendations, CacheTTL.LONG);
-    
-    return recommendations;
-  } catch (error) {
-    console.error('AI Recommendations failed:', error);
-    // Return basic recommendations from the destinations list
-    return destinations.slice(0, 5).map(d => ({
+    const raw = extractJSONFromResponse(text);
+    const recommendations = normalizeRecommendations(raw);
+    if (recommendations.length) {
+      await cache.set(cacheKey, recommendations, CacheTTL.LONG);
+      return recommendations;
+    }
+    return destinations.slice(0, 5).map((d) => ({
       destinationId: d.id,
       name: d.name,
       country: d.country,
-      matchScore: Math.floor(Math.random() * 20) + 75, // Fallback score
+      matchScore: 72,
+      reason: 'Suggested from our catalog while the model returned an unexpected shape.',
+      bestTimeToVisit: d.bestSeason,
+      estimatedCostPerDay: d.avgCostPerDay,
+    }));
+  } catch (error) {
+    console.error('AI Recommendations failed:', error);
+    const fallback = destinations.slice(0, 5).map((d) => ({
+      destinationId: d.id,
+      name: d.name,
+      country: d.country,
+      matchScore: 70,
       reason: 'Popular destination matching your interests',
       bestTimeToVisit: d.bestSeason,
       estimatedCostPerDay: d.avgCostPerDay,
     }));
+    return fallback;
   }
 };
 
@@ -242,44 +290,65 @@ interface ChatResponse {
   }>;
 }
 
-const chat = async (message: string, history: ChatMessage[], userId?: string): Promise<ChatResponse> => {
-  // Fetch travel context
-  const popularDestinations = await prisma.destination.findMany({
+const buildTravelChatContext = async (userId?: string) => {
+  const featured = await prisma.destination.findMany({
     where: { isFeatured: true },
-    take: 5,
+    take: 8,
+    select: { name: true, country: true, category: true },
   });
+  const featuredSummary = featured
+    .map((d) => `${d.name}, ${d.country} (${d.category})`)
+    .join('; ');
 
-  let userContext = '';
-  if (userId) {
-    const userTrips = await prisma.trip.findMany({
-      where: { userId },
-      include: { destination: true },
-      take: 3,
-      orderBy: { startDate: 'desc' },
-    });
-    userContext = `User's recent trips: ${userTrips.map(t => t.destination.name).join(', ')}`;
+  if (!userId) {
+    return { featuredSummary, userBlock: '' as string };
   }
 
+  const [prefs, trips, bookings] = await Promise.all([
+    prisma.travelPreference.findUnique({ where: { userId } }),
+    prisma.trip.findMany({
+      where: { userId },
+      take: 5,
+      orderBy: { startDate: 'desc' },
+      include: { destination: { select: { name: true, country: true } } },
+    }),
+    prisma.booking.findMany({
+      where: { userId },
+      take: 5,
+      orderBy: { createdAt: 'desc' },
+      select: { type: true, status: true, totalAmount: true },
+    }),
+  ]);
+
+  const userBlock = [
+    prefs ? `Preferences (JSON): ${JSON.stringify(prefs)}` : 'Preferences: not set',
+    `Recent trips: ${trips.map((t) => `${t.destination.name} (${t.startDate.toISOString().slice(0, 10)})`).join('; ') || 'none'}`,
+    `Recent bookings: ${bookings.map((b) => `${b.type} ${b.status} $${Number(b.totalAmount)}`).join('; ') || 'none'}`,
+  ].join('\n');
+
+  return { featuredSummary, userBlock };
+};
+
+const chat = async (message: string, history: ChatMessage[], userId?: string): Promise<ChatResponse> => {
+  const { featuredSummary, userBlock } = await buildTravelChatContext(userId);
+
   const prompt = `
-    You are a helpful AI travel assistant. Answer the user's question based on your knowledge and the provided context.
-    
-    Popular Destinations: ${popularDestinations.map(d => d.name).join(', ')}
-    ${userContext}
-    
-    Conversation History:
-    ${history.slice(-5).map(h => `${h.role}: ${h.content}`).join('\n')}
-    
+    You are a helpful AI travel assistant for TriPlannerAI. Use the context. Be concise and practical.
+
+    Featured destinations: ${featuredSummary}
+    ${userBlock ? `${userBlock}\n` : ''}
+
+    Conversation:
+    ${history.slice(-8).map((h) => `${h.role}: ${h.content}`).join('\n')}
+
     User: ${message}
-    
-    Provide a helpful, friendly response. Include practical travel advice when relevant.
-    Suggest specific destinations or activities if appropriate.
-    
-    Return JSON format:
+
+    Return VALID JSON only:
     {
-      "reply": "Your detailed response here",
+      "reply": "markdown-friendly answer",
       "suggestions": [
-        { "type": "destination", "title": "Consider visiting...", "action": "/destinations/xyz" },
-        { "type": "plan", "title": "Plan a trip", "action": "/dashboard/trips/new" }
+        { "type": "destination", "title": "Short CTA label", "action": "/destinations" },
+        { "type": "plan", "title": "Dashboard", "action": "/dashboard" }
       ]
     }
   `;
@@ -288,14 +357,54 @@ const chat = async (message: string, history: ChatMessage[], userId?: string): P
     const text = await callGeminiWithFallback(prompt);
     return extractJSONFromResponse(text);
   } catch (error) {
-    // Fallback response
     return {
-      reply: "I'm here to help with your travel questions! You can ask me about destinations, activities, travel tips, or help planning your trip.",
+      reply:
+        "I'm here to help with destinations, itineraries, and travel tips. Try asking about a place or season.",
       suggestions: [
-        { type: 'plan', title: 'Plan a new trip', action: '/dashboard' },
+        { type: 'plan', title: 'Open dashboard', action: '/dashboard' },
         { type: 'destinations', title: 'Browse destinations', action: '/destinations' },
       ],
     };
+  }
+};
+
+const streamTravelChat = async (
+  message: string,
+  history: ChatMessage[],
+  userId: string | undefined,
+  res: Response,
+): Promise<void> => {
+  const { featuredSummary, userBlock } = await buildTravelChatContext(userId);
+  const prompt = `You are a helpful AI travel assistant for TriPlannerAI. Use markdown when it helps (headings, lists). Output prose only — no JSON.
+
+Featured destinations: ${featuredSummary}
+${userBlock ? `${userBlock}\n` : ''}
+
+Conversation:
+${history.slice(-8).map((h) => `${h.role}: ${h.content}`).join('\n')}
+
+User: ${message}
+`;
+
+  res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  (res as Response & { flushHeaders?: () => void }).flushHeaders?.();
+
+  try {
+    const streamResult = await geminiModel.generateContentStream(prompt);
+    for await (const chunk of streamResult.stream) {
+      const text = chunk.text();
+      if (text) {
+        res.write(`data: ${JSON.stringify({ text })}\n\n`);
+      }
+    }
+    res.write('data: [DONE]\n\n');
+    res.end();
+  } catch (error) {
+    console.error('streamTravelChat', error);
+    res.write(`data: ${JSON.stringify({ error: 'stream_failed' })}\n\n`);
+    res.end();
   }
 };
 
@@ -486,41 +595,13 @@ interface CaptionResult {
 }
 
 const captionImage = async (imageUrl: string): Promise<CaptionResult> => {
-  const prompt = `
-    Analyze this travel photo and provide:
-    1. A descriptive caption (2-3 sentences)
-    2. The likely location if identifiable
-    3. 5-7 relevant tags
-    4. 3-5 suggested hashtags
-    
-    Return JSON:
-    {
-      "caption": "Beautiful sunset over the ancient temples...",
-      "detectedLocation": "Angkor Wat, Cambodia",
-      "tags": ["temple", "sunset", "heritage", "travel"],
-      "suggestedHashtags": ["#AngkorWat", "#Cambodia", "#TravelPhotography"]
-    }
-  `;
-
-  try {
-    // For vision model, we need to use the specific vision capabilities
-    const result = await geminiVisionModel.generateContent([
-      { text: prompt },
-      { inlineData: { mimeType: 'image/jpeg', data: imageUrl } },
-    ]);
-    
-    const response = await result.response;
-    const text = response.text();
-    
-    return extractJSONFromResponse(text);
-  } catch (error) {
-    console.error('AI Image Captioning failed:', error);
-    return {
-      caption: 'A beautiful travel destination',
-      tags: ['travel', 'photography'],
-      suggestedHashtags: ['#Travel', '#Wanderlust'],
-    };
-  }
+  const result = await captionTravelImageWithGemini(imageUrl);
+  return {
+    caption: result.caption,
+    detectedLocation: result.detectedLocation,
+    tags: result.tags,
+    suggestedHashtags: result.suggestedHashtags,
+  };
 };
 
 // ============================================================================
@@ -530,6 +611,7 @@ export const AIService = {
   generateItinerary,
   getRecommendations,
   chat,
+  streamTravelChat,
   analyzeData,
   categorize,
   captionImage,

@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 const createTripSchema = z.object({
   body: z.object({
-    destinationId: z.string({ message: 'Destination ID is required' }),
+    destinationId: z.string().uuid({ message: 'Destination ID must be a valid UUID' }),
     title: z.string({ message: 'Title is required' }),
     startDate: z.string({ message: 'Start date is required' }),
     endDate: z.string({ message: 'End date is required' }),
@@ -19,6 +19,7 @@ const updateTripSchema = z.object({
     status: z.enum(['DRAFT', 'PLANNED', 'BOOKED', 'COMPLETED', 'CANCELLED']).optional(),
     totalBudget: z.number().optional(),
     travelerCount: z.number().optional(),
+    galleryImages: z.array(z.string()).optional(),
   }),
 });
 

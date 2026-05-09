@@ -2,6 +2,59 @@ import httpStatus from 'http-status';
 import catchAsync from '../../utils/catchAsync';
 import sendResponse from '../../utils/sendResponse';
 import { UserService } from './user.service';
+import { Role } from '@prisma/client';
+
+const getAllUsers = catchAsync(async (req, res) => {
+  const q = req.query as {
+    search?: string;
+    page?: string;
+    limit?: string;
+    sortBy?: string;
+    sortOrder?: string;
+    suspended?: string;
+  };
+  const result = await UserService.getAllUsersForAdminFromDB({
+    search: q.search,
+    page: q.page ? Number(q.page) : 1,
+    limit: q.limit ? Number(q.limit) : 25,
+    sortBy: (q.sortBy as 'createdAt' | 'name' | 'email' | 'role') || 'createdAt',
+    sortOrder: (q.sortOrder as 'asc' | 'desc') || 'desc',
+    suspended: (q.suspended as 'all' | 'true' | 'false') || 'all',
+  });
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: 'Users retrieved successfully',
+    data: result,
+  });
+});
+
+const updateUserSuspension = catchAsync(async (req, res) => {
+  const userId = String(req.params.userId);
+  const { isSuspended } = req.body as { isSuspended: boolean };
+  const result = await UserService.updateUserSuspensionInDB(userId, isSuspended);
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: isSuspended ? 'User suspended' : 'User reinstated',
+    data: result,
+  });
+});
+
+const updateUserRole = catchAsync(async (req, res) => {
+  const userId = String(req.params.userId);
+  const { role } = req.body as { role: Role };
+  const result = await UserService.updateUserRoleInDB(userId, role);
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: 'User role updated successfully',
+    data: result,
+  });
+});
 
 const getMyProfile = catchAsync(async (req, res) => {
   const userId = req.user?.id as string;
@@ -41,6 +94,9 @@ const getDashboardStats = catchAsync(async (req, res) => {
 });
 
 export const UserController = {
+  getAllUsers,
+  updateUserRole,
+  updateUserSuspension,
   getMyProfile,
   updateMyProfile,
   getDashboardStats,

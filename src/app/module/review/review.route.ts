@@ -14,6 +14,24 @@ router.post(
   ReviewController.createReview,
 );
 
-router.get('/:destinationId', ReviewController.getDestinationReviews);
+router.get(
+  '/admin/all',
+  requireAuth(Role.ADMIN, Role.TRAVEL_AGENT),
+  validateRequest(ReviewValidation.adminListReviewsSchema),
+  ReviewController.adminListReviews,
+);
+
+router.delete(
+  '/:reviewId',
+  requireAuth(Role.ADMIN, Role.TRAVEL_AGENT),
+  validateRequest(ReviewValidation.deleteReviewSchema),
+  ReviewController.deleteReview,
+);
+
+router.get(
+  '/:destinationId',
+  validateRequest(ReviewValidation.listDestinationReviewsSchema),
+  ReviewController.getDestinationReviews,
+);
 
 export const ReviewRoutes = router;

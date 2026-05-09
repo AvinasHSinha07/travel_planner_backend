@@ -17,7 +17,8 @@ const getMyNotifications = catchAsync(async (req, res) => {
 
 const markAsRead = catchAsync(async (req, res) => {
   const { id } = req.params;
-  const result = await NotificationService.markAsReadInDB(id as string);
+  const userId = req.user?.id as string;
+  const result = await NotificationService.markAsReadInDB(id as string, userId);
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
@@ -27,7 +28,34 @@ const markAsRead = catchAsync(async (req, res) => {
   });
 });
 
+const markAllAsRead = catchAsync(async (req, res) => {
+  const userId = req.user?.id as string;
+  const result = await NotificationService.markAllAsReadInDB(userId);
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: 'All notifications marked as read',
+    data: result,
+  });
+});
+
+const deleteNotification = catchAsync(async (req, res) => {
+  const { id } = req.params;
+  const userId = req.user?.id as string;
+  const result = await NotificationService.deleteNotificationInDB(id as string, userId);
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: 'Notification deleted',
+    data: result,
+  });
+});
+
 export const NotificationController = {
   getMyNotifications,
   markAsRead,
+  markAllAsRead,
+  deleteNotification,
 };

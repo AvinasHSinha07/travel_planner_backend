@@ -1,20 +1,86 @@
+import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 
-const createActivityIntoDB = async (payload: any) => {
-  const result = await prisma.activity.create({
+const createActivityIntoDB = async (payload: Prisma.ActivityUncheckedCreateInput) => {
+  return prisma.activity.create({
     data: payload,
   });
-  return result;
+};
+
+const listActivitiesFromDB = async (q: {
+  destinationId?: string;
+  page: number;
+  limit: number;
+  sortBy: 'name' | 'price' | 'createdAt' | 'rating' | 'type';
+  sortOrder: 'asc' | 'desc';
+  search?: string;
+}) => {
+  const take = Math.min(Math.max(q.limit, 1), 100);
+  const skip = (Math.max(q.page, 1) - 1) * take;
+
+  const where: Prisma.ActivityWhereInput = {};
+  if (q.destinationId) where.destinationId = q.destinationId;
+  if (q.search?.trim()) {
+    where.OR = [
+      { name: { contains: q.search.trim(), mode: 'insensitive' } },
+      { description: { contains: q.search.trim(), mode: 'insensitive' } },
+      { type: { contains: q.search.trim(), mode: 'insensitive' } },
+    ];
+  }
+
+  const orderBy: Prisma.ActivityOrderByWithRelationInput = {
+    [q.sortBy]: q.sortOrder,
+  };
+
+  const [items, total] = await Promise.all([
+    prisma.activity.findMany({
+      where,
+      orderBy,
+      skip,
+      take,
+      include: {
+        destination: { select: { id: true, name: true, country: true } },
+      },
+    }),
+    prisma.activity.count({ where }),
+  ]);
+
+  return {
+    items,
+    meta: {
+      total,
+      page: q.page,
+      limit: take,
+      totalPages: Math.ceil(total / take) || 1,
+    },
+  };
 };
 
 const getDestinationActivitiesFromDB = async (destinationId: string) => {
-  const result = await prisma.activity.findMany({
+  return prisma.activity.findMany({
     where: { destinationId },
+    orderBy: { name: 'asc' },
   });
-  return result;
+};
+
+const updateActivityInDB = async (id: string, payload: Prisma.ActivityUpdateInput) => {
+  return prisma.activity.update({
+    where: { id },
+    data: payload,
+    include: {
+      destination: { select: { id: true, name: true, country: true } },
+    },
+  });
+};
+
+const deleteActivityFromDB = async (id: string) => {
+  return prisma.activity.delete({ where: { id } });
 };
 
 export const ActivityService = {
   createActivityIntoDB,
+  listActivitiesFromDB,
   getDestinationActivitiesFromDB,
+  updateActivityInDB,
+  deleteActivityFromDB,
 };

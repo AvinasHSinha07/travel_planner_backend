@@ -14,6 +14,32 @@ const createActivity = catchAsync(async (req, res) => {
   });
 });
 
+const listActivities = catchAsync(async (req, res) => {
+  const q = req.query as {
+    destinationId?: string;
+    page?: string;
+    limit?: string;
+    sortBy?: string;
+    sortOrder?: string;
+    search?: string;
+  };
+  const result = await ActivityService.listActivitiesFromDB({
+    destinationId: q.destinationId,
+    page: q.page ? Number(q.page) : 1,
+    limit: q.limit ? Number(q.limit) : 20,
+    sortBy: (q.sortBy as 'name' | 'price' | 'createdAt' | 'rating' | 'type') || 'createdAt',
+    sortOrder: (q.sortOrder as 'asc' | 'desc') || 'desc',
+    search: q.search,
+  });
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: 'Activities retrieved successfully',
+    data: result,
+  });
+});
+
 const getDestinationActivities = catchAsync(async (req, res) => {
   const { destinationId } = req.params;
   const result = await ActivityService.getDestinationActivitiesFromDB(destinationId as string);
@@ -26,7 +52,34 @@ const getDestinationActivities = catchAsync(async (req, res) => {
   });
 });
 
+const updateActivity = catchAsync(async (req, res) => {
+  const { id } = req.params;
+  const result = await ActivityService.updateActivityInDB(id as string, req.body);
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: 'Activity updated successfully',
+    data: result,
+  });
+});
+
+const deleteActivity = catchAsync(async (req, res) => {
+  const { id } = req.params;
+  await ActivityService.deleteActivityFromDB(id as string);
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: 'Activity deleted successfully',
+    data: null,
+  });
+});
+
 export const ActivityController = {
   createActivity,
+  listActivities,
   getDestinationActivities,
+  updateActivity,
+  deleteActivity,
 };

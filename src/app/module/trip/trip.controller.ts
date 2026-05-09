@@ -1,4 +1,5 @@
 import httpStatus from 'http-status';
+import { Role } from '@prisma/client';
 import catchAsync from '../../utils/catchAsync';
 import sendResponse from '../../utils/sendResponse';
 import { TripService } from './trip.service';
@@ -55,8 +56,9 @@ const updateTrip = catchAsync(async (req, res) => {
 
 const deleteTrip = catchAsync(async (req, res) => {
   const userId = req.user?.id as string;
+  const role = req.user?.role as Role;
   const { id } = req.params;
-  const result = await TripService.deleteTripFromDB(id as string, userId);
+  const result = await TripService.deleteTripFromDB(id as string, userId, role);
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
@@ -67,8 +69,10 @@ const deleteTrip = catchAsync(async (req, res) => {
 });
 
 const addItineraryItem = catchAsync(async (req, res) => {
+  const userId = req.user?.id as string;
+  const role = req.user?.role as Role;
   const { tripId } = req.params;
-  const result = await TripService.addItineraryItemToDB(tripId as string, req.body);
+  const result = await TripService.addItineraryItemToDB(tripId as string, userId, role, req.body);
 
   sendResponse(res, {
     statusCode: httpStatus.CREATED,
@@ -79,8 +83,10 @@ const addItineraryItem = catchAsync(async (req, res) => {
 });
 
 const updateItineraryItem = catchAsync(async (req, res) => {
+  const userId = req.user?.id as string;
+  const role = req.user?.role as Role;
   const { itemId } = req.params;
-  const result = await TripService.updateItineraryItemInDB(itemId as string, req.body);
+  const result = await TripService.updateItineraryItemInDB(itemId as string, userId, role, req.body);
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
@@ -91,8 +97,10 @@ const updateItineraryItem = catchAsync(async (req, res) => {
 });
 
 const removeItineraryItem = catchAsync(async (req, res) => {
+  const userId = req.user?.id as string;
+  const role = req.user?.role as Role;
   const { itemId } = req.params;
-  const result = await TripService.removeItineraryItemFromDB(itemId as string);
+  const result = await TripService.removeItineraryItemFromDB(itemId as string, userId, role);
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
