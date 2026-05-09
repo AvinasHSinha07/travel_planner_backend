@@ -1,0 +1,345 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// --- Better Auth Tables ---
+
+model User {
+  id               String            @id @default(uuid())
+  email            String            @unique
+  name             String
+  role             Role              @default(USER)
+  avatar           String?
+  phone            String?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  emailVerified    Boolean           @default(false)
+  
+  sessions         Session[]
+  accounts         Account[]
+  
+  trips            Trip[]
+  bookings         Booking[]
+  reviews          Review[]
+  notifications    Notification[]
+  preferences      TravelPreference?
+
+  @@map("user")
+}
+
+model Session {
+  id             String   @id @default(uuid())
+  userId         String
+  token          String   @unique
+  expiresAt      DateTime
+  ipAddress      String?
+  userAgent      String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id @default(uuid())
+  userId                String
+  accountId             String
+  providerId            String
+  accessToken           String?
+  refreshToken          String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  idToken               String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id @default(uuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("verification")
+}
+
+// --- Domain Models ---
+
+model Destination {
+  id             String          @id @default(uuid())
+  name           String
+  country        String
+  description    String          @db.Text
+  summary        String          @db.Text
+  images         String[]
+  tags           String[]
+  category       String
+  bestSeason     String
+  avgCostPerDay  Float
+  currency       String          @default("USD")
+  rating         Float           @default(0)
+  latitude       Float?
+  longitude      Float?
+  isFeatured     Boolean         @default(false)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  activities     Activity[]
+  accommodations Accommodation[]
+  reviews        Review[]
+  trips          Trip[]
+  stats          DestinationStats?
+
+  @@map("destination")
+}
+
+model Trip {
+  id             String          @id @default(uuid())
+  userId         String
+  destinationId  String
+  title          String
+  startDate      DateTime
+  endDate        DateTime
+  status         TripStatus      @default(DRAFT)
+  totalBudget    Float
+  travelerCount  Int             @default(1)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  user           User            @relation(fields: [userId], references: [id])
+  destination    Destination     @relation(fields: [destinationId], references: [id])
+  itineraryItems ItineraryItem[]
+  bookings       Booking[]
+
+  @@map("trip")
+}
+
+model ItineraryItem {
+  id             String          @id @default(uuid())
+  tripId         String
+  day            Int
+  timeSlot       TimeSlot
+  title          String
+  description    String?         @db.Text
+  location       String?
+  type           ItineraryType
+  estimatedCost  Float?
+  notes          String?         @db.Text
+  order          Int             @default(0)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  trip           Trip            @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  @@map("itinerary_item")
+}
+
+model Activity {
+  id             String          @id @default(uuid())
+  destinationId  String
+  name           String
+  description    String          @db.Text
+  type           String
+  price          Float
+  duration       String
+  rating         Float           @default(0)
+  images         String[]
+  location       String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  destination    Destination     @relation(fields: [destinationId], references: [id], onDelete: Cascade)
+
+  @@map("activity")
+}
+
+model Accommodation {
+  id             String            @id @default(uuid())
+  destinationId  String
+  name           String
+  type           AccommodationType
+  pricePerNight  Float
+  rating         Float             @default(0)
+  amenities      String[]
+  images         String[]
+  location       String?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  destination    Destination       @relation(fields: [destinationId], references: [id], onDelete: Cascade)
+
+  @@map("accommodation")
+}
+
+model Booking {
+  id                     String        @id @default(uuid())
+  userId                 String
+  tripId                 String?
+  type                   BookingType
+  status                 BookingStatus @default(PENDING)
+  totalAmount            Float
+  stripeSessionId        String?       @unique
+  stripePaymentIntentId  String?       @unique
+  metadata               Json?
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @updatedAt
+
+  user                   User          @relation(fields: [userId], references: [id])
+  trip                   Trip?         @relation(fields: [tripId], references: [id])
+
+  @@map("booking")
+}
+
+model Review {
+  id             String      @id @default(uuid())
+  userId         String
+  destinationId  String
+  rating         Int         @default(5)
+  comment        String      @db.Text
+  images         String[]
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  user           User        @relation(fields: [userId], references: [id])
+  destination    Destination @relation(fields: [destinationId], references: [id], onDelete: Cascade)
+
+  @@map("review")
+}
+
+model TravelPreference {
+  id                  String      @id @default(uuid())
+  userId              String      @unique
+  interests           String[]
+  budgetRange         String?
+  travelStyle         TravelStyle @default(ADVENTURE)
+  dietaryRestrictions String[]
+  preferredClimate    String?
+  mobilityNeeds       String?
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+
+  user                User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("travel_preference")
+}
+
+model Notification {
+  id        String           @id @default(uuid())
+  userId    String
+  type      NotificationType
+  title     String
+  message   String           @db.Text
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notification")
+}
+
+model AnalyticsDailyStats {
+  id              String   @id @default(uuid())
+  date            DateTime @unique @default(now())
+  totalBookings   Int      @default(0)
+  totalRevenue    Float    @default(0)
+  totalTrips      Int      @default(0)
+  newUsers        Int      @default(0)
+
+  @@map("analytics_daily_stats")
+}
+
+model DestinationStats {
+  id             String      @id @default(uuid())
+  destinationId  String      @unique
+  viewCount      Int         @default(0)
+  bookingCount   Int         @default(0)
+  averageRating  Float       @default(0)
+
+  destination    Destination @relation(fields: [destinationId], references: [id], onDelete: Cascade)
+
+  @@map("destination_stats")
+}
+
+// --- Enums ---
+
+enum Role {
+  USER
+  ADMIN
+  TRAVEL_AGENT
+}
+
+enum TripStatus {
+  DRAFT
+  PLANNED
+  BOOKED
+  COMPLETED
+  CANCELLED
+}
+
+enum TimeSlot {
+  morning
+  afternoon
+  evening
+  night
+}
+
+enum ItineraryType {
+  SIGHTSEEING
+  DINING
+  TRANSPORT
+  ACTIVITY
+  REST
+  ACCOMMODATION
+}
+
+enum AccommodationType {
+  HOTEL
+  RESORT
+  HOSTEL
+  AIRBNB
+  VILLA
+}
+
+enum BookingType {
+  FLIGHT
+  HOTEL
+  ACTIVITY
+  PACKAGE
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  REFUNDED
+}
+
+enum TravelStyle {
+  ADVENTURE
+  RELAXATION
+  CULTURAL
+  LUXURY
+  BUDGET
+  FAMILY
+}
+
+enum NotificationType {
+  BOOKING
+  TRIP_REMINDER
+  PROMOTION
+  SYSTEM
+}
