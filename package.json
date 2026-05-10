@@ -9,7 +9,7 @@
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "build": "prisma generate && tsc",
-    "start": "node --import ./dist/instrument.js dist/server.js",
+    "start": "node --experimental-specifier-resolution=node --import ./dist/instrument.js dist/server.js",
     "type-check": "tsc --noEmit",
     "test": "echo \"Error: no test specified\" && exit 1",
     "test:ai-e2e": "tsx scripts/ai-gemini-smoke.ts"
