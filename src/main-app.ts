@@ -31,12 +31,12 @@ app.use(cors({
   origin: function (origin, callback) {
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
-    
+
     // Allow localhost variations in development
     if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
       return callback(null, true);
     }
-    
+
     if (allowedOrigins.includes(origin) || origin.endsWith('.vercel.app')) {
       callback(null, true);
     } else {
@@ -128,13 +128,13 @@ app.get("/debug-sentry", function mainHandler(req: Request, res: Response) {
 app.get('/api/v1/debug/auth', async (req: Request, res: Response) => {
   const { fromNodeHeaders } = await import('better-auth/node');
   const { auth } = await import('./app/lib/auth');
-  
+
   console.log('[DEBUG] Cookies received:', req.headers.cookie);
-  
+
   const session = await auth.api.getSession({
     headers: fromNodeHeaders(req.headers)
   });
-  
+
   res.json({
     hasSession: !!session,
     user: session?.user || null,

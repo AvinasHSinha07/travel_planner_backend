@@ -8,8 +8,8 @@
     "dev": "tsx watch --import ./src/instrument.ts src/server.ts",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
-    "build": "prisma generate && tsc",
-    "start": "node --experimental-specifier-resolution=node --import ./dist/instrument.js dist/server.js",
+    "build": "prisma generate && tsup src/server.ts src/instrument.ts --format esm --clean --minify --sourcemap --dts",
+    "start": "node --import ./dist/instrument.js dist/server.js",
     "type-check": "tsc --noEmit",
     "test": "echo \"Error: no test specified\" && exit 1",
     "test:ai-e2e": "tsx scripts/ai-gemini-smoke.ts"
@@ -57,6 +57,7 @@
     "@types/pino-http": "^5.8.4",
     "@types/ws": "^8.18.1",
     "prisma": "^7.8.0",
+    "tsup": "^8.5.1",
     "tsx": "^4.21.0",
     "typescript": "^6.0.3"
   },
