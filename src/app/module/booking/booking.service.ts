@@ -1,5 +1,5 @@
 import { BookingStatus, BookingType, Prisma, Role, TripStatus } from '@prisma/client';
-import type Stripe from 'stripe';
+import Stripe from 'stripe';
 import { prisma } from '../../lib/prisma';
 import { stripe } from '../../utils/stripe';
 import { env } from '../../config/env';
@@ -215,7 +215,7 @@ const verifyCheckoutSessionForUser = async (
 };
 
 const handleStripeWebhook = async (rawBody: Buffer, signature: string | string[] | undefined) => {
-  let event: Stripe.Event;
+  let event: any;
 
   const sigHeader = Array.isArray(signature) ? signature[0] : signature;
 
@@ -226,13 +226,13 @@ const handleStripeWebhook = async (rawBody: Buffer, signature: string | string[]
     event = stripe.webhooks.constructEvent(rawBody, sigHeader, env.STRIPE_WEBHOOK_SECRET);
   } else if (env.NODE_ENV === 'development') {
     console.warn('[STRIPE] Webhook processed without signature verification (dev only).');
-    event = JSON.parse(rawBody.toString('utf8')) as unknown as Stripe.Event;
+    event = JSON.parse(rawBody.toString('utf8')) as any;
   } else {
     throw new AppError(400, 'Missing Stripe webhook signature or STRIPE_WEBHOOK_SECRET.');
   }
 
   if (event.type === 'checkout.session.completed') {
-    const session = event.data.object as Stripe.Checkout.Session;
+    const session = event.data.object as any;
     const bookingId = session.metadata?.bookingId;
 
     if (!bookingId) {
