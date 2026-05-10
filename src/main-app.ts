@@ -119,6 +119,16 @@ app.get('/', (req: Request, res: Response) => {
   });
 });
 
+app.get('/health', (req: Request, res: Response) => {
+  res.status(200).json({
+    success: true,
+    message: 'Server is healthy',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+  });
+});
+
+
 // Sentry Debug Route
 app.get("/debug-sentry", function mainHandler(req: Request, res: Response) {
   throw new Error("My first Sentry error!");

@@ -110,6 +110,13 @@ All API endpoints are prefixed with `/api/v1`.
 | `POST` | `/booking/checkout` | Create Stripe Checkout session |
 | `POST` | `/booking/webhook` | Handle Stripe payment events |
 
+### 🛠 Utility & Health
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/health` | Check server health and uptime (for Render/UptimeRobot) |
+| `GET` | `/` | API Root / Welcome message |
+
+
 ---
 
 ## ✨ Key Features in Detail
