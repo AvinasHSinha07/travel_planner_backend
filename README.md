@@ -16,6 +16,7 @@
 - [Problem Statement](#-problem-statement)
 - [Solution Overview](#-solution-overview)
 - [Tech Stack](#-tech-stack)
+- [Live Demo & Deployment](#-live-demo--deployment)
 - [Project Structure](#-project-structure)
 - [API Architecture & Endpoints](#-api-architecture--endpoints)
 - [Key Features in Detail](#-key-features-in-detail)
@@ -34,6 +35,10 @@ TRIPPLANNERAI provides a robust API that leverages **Google Gemini AI** to autom
 - **Intelligent Itinerary Generation:** Tailored schedules based on user preferences.
 - **Admin Automation:** AI-assisted content creation for travel resources.
 - **Secure Transactions:** Integrated Stripe payments and role-based access control.
+
+## 🌐 Live Demo & Deployment
+- **Frontend App:** [https://travel-planner-frontend-silk.vercel.app/](https://travel-planner-frontend-silk.vercel.app/)
+- **Backend API:** [https://travel-planner-backend-1-57c6.onrender.com/](https://travel-planner-backend-1-57c6.onrender.com/)
 
 ## 🛠 Tech Stack
 - **Runtime:** Node.js (v20+)
