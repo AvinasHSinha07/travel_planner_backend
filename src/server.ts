@@ -6,8 +6,8 @@ import './workers/ai.worker';
 
 async function bootstrap() {
   try {
-    const server = app.listen(env.PORT, () => {
-      console.log(`🚀 Server is running on port ${env.PORT} in ${env.NODE_ENV} mode`);
+    const server = app.listen(Number(env.PORT), '0.0.0.0', () => {
+      console.log(`🚀 Server is running on http://127.0.0.1:${env.PORT} in ${env.NODE_ENV} mode`);
     });
 
     const exitHandler = () => {
