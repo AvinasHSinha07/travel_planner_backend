@@ -1,17 +1,21 @@
 import { Destination, Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 
-const createDestinationIntoDB = async (payload: Destination) => {
+const createDestinationIntoDB = async (payload: Destination, creatorId?: string) => {
   const result = await prisma.destination.create({
-    data: payload,
+    data: { ...payload, creatorId },
   });
   return result;
 };
 
-const getAllDestinationsFromDB = async (query: any) => {
-  const { searchTerm, category, country, minPrice, maxPrice, sortBy, sortOrder } = query;
+const getAllDestinationsFromDB = async (query: any, user?: any) => {
+  const { searchTerm, category, country, minPrice, maxPrice, sortBy, sortOrder, page = 1, limit = 12, isManagement } = query;
 
   const whereConditions: Prisma.DestinationWhereInput = {};
+
+  if (user?.role === 'TRAVEL_AGENT' && isManagement === 'true') {
+    whereConditions.creatorId = user.id;
+  }
 
   if (searchTerm) {
     whereConditions.OR = [
@@ -31,16 +35,31 @@ const getAllDestinationsFromDB = async (query: any) => {
     };
   }
 
+  const skip = (Number(page) - 1) * Number(limit);
+  const take = Number(limit);
+
   const result = await prisma.destination.findMany({
     where: whereConditions,
-    orderBy: sortBy ? { [sortBy]: sortOrder || 'desc' } : { createdAt: 'desc' },
+    orderBy: sortBy ? { [sortBy]: sortOrder || 'asc' } : { createdAt: 'desc' },
+    skip,
+    take,
     include: {
       activities: true,
       accommodations: true,
     },
   });
 
-  return result;
+  const total = await prisma.destination.count({ where: whereConditions });
+
+  return {
+    meta: {
+      page: Number(page),
+      limit: Number(limit),
+      total,
+      totalPage: Math.ceil(total / Number(limit)),
+    },
+    data: result,
+  };
 };
 
 const getSingleDestinationFromDB = async (id: string) => {
@@ -61,7 +80,14 @@ const getSingleDestinationFromDB = async (id: string) => {
   return result;
 };
 
-const updateDestinationInDB = async (id: string, payload: Partial<Destination>) => {
+const updateDestinationInDB = async (id: string, payload: Partial<Destination>, user?: any) => {
+  if (user?.role === 'TRAVEL_AGENT') {
+    const dest = await prisma.destination.findUnique({ where: { id } });
+    if (!dest || dest.creatorId !== user.id) {
+      throw new Error('Unauthorized or Destination not found');
+    }
+  }
+
   const result = await prisma.destination.update({
     where: { id },
     data: payload,
@@ -69,7 +95,14 @@ const updateDestinationInDB = async (id: string, payload: Partial<Destination>) 
   return result;
 };
 
-const deleteDestinationFromDB = async (id: string) => {
+const deleteDestinationFromDB = async (id: string, user?: any) => {
+  if (user?.role === 'TRAVEL_AGENT') {
+    const dest = await prisma.destination.findUnique({ where: { id } });
+    if (!dest || dest.creatorId !== user.id) {
+      throw new Error('Unauthorized or Destination not found');
+    }
+  }
+
   const result = await prisma.destination.delete({
     where: { id },
   });

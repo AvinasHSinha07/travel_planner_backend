@@ -17,10 +17,9 @@ const createBooking = catchAsync(async (req, res) => {
 });
 
 const updateBookingStatus = catchAsync(async (req, res) => {
-  const role = req.user?.role as Role;
   const bookingId = String(req.params.id);
   const { status } = req.body;
-  const result = await BookingService.updateBookingStatusInDB(bookingId, status, role);
+  const result = await BookingService.updateBookingStatusInDB(bookingId, status, req.user);
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
@@ -48,24 +47,26 @@ const listBookings = catchAsync(async (req, res) => {
       type: q.type as any,
       page: Number.isFinite(page) && page > 0 ? page : 1,
       limit: Number.isFinite(limit) && limit > 0 ? limit : 25,
-    });
+    }, req.user);
 
     sendResponse(res, {
       statusCode: httpStatus.OK,
       success: true,
       message: 'Bookings retrieved successfully',
-      data: result,
+      meta: result.meta,
+      data: result.items,
     });
     return;
   }
 
-  const result = await BookingService.getMyBookingsFromDB(userId);
+  const result = await BookingService.getMyBookingsFromDB(userId, req.query);
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
     message: 'Bookings retrieved successfully',
-    data: result,
+    meta: result.meta,
+    data: result.data,
   });
 });
 

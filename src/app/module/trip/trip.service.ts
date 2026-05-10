@@ -1,4 +1,4 @@
-import { ItineraryItem, Role } from '@prisma/client';
+import { ItineraryItem, Prisma, Role } from '@prisma/client';
 import httpStatus from 'http-status';
 import { prisma } from '../../lib/prisma';
 import { cache } from '../../lib/redis';
@@ -16,18 +16,49 @@ const createTripIntoDB = async (userId: string, payload: any) => {
   return result;
 };
 
-const getMyTripsFromDB = async (userId: string) => {
-  const result = await prisma.trip.findMany({
-    where: { userId },
-    include: {
-      destination: true,
-      itineraryItems: {
-        orderBy: [{ day: 'asc' }, { order: 'asc' }],
+const getMyTripsFromDB = async (userId: string, query: any) => {
+  const { searchTerm, status, page = 1, limit = 10 } = query;
+  const skip = (Number(page) - 1) * Number(limit);
+  const take = Number(limit);
+
+  const whereConditions: Prisma.TripWhereInput = { userId };
+
+  if (searchTerm) {
+    whereConditions.OR = [
+      { title: { contains: searchTerm, mode: 'insensitive' } },
+      { destination: { name: { contains: searchTerm, mode: 'insensitive' } } },
+    ];
+  }
+
+  if (status) {
+    whereConditions.status = status;
+  }
+
+  const [result, total] = await Promise.all([
+    prisma.trip.findMany({
+      where: whereConditions,
+      include: {
+        destination: true,
+        itineraryItems: {
+          orderBy: [{ day: 'asc' }, { order: 'asc' }],
+        },
       },
+      orderBy: { createdAt: 'desc' },
+      skip,
+      take,
+    }),
+    prisma.trip.count({ where: whereConditions }),
+  ]);
+
+  return {
+    meta: {
+      page: Number(page),
+      limit: Number(limit),
+      total,
+      totalPage: Math.ceil(total / Number(limit)),
     },
-    orderBy: { createdAt: 'desc' },
-  });
-  return result;
+    data: result,
+  };
 };
 
 const getSingleTripFromDB = async (id: string, userId: string, role: Role) => {

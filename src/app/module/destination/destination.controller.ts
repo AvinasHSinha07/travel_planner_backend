@@ -4,7 +4,7 @@ import sendResponse from '../../utils/sendResponse';
 import { DestinationService } from './destination.service';
 
 const createDestination = catchAsync(async (req, res) => {
-  const result = await DestinationService.createDestinationIntoDB(req.body);
+  const result = await DestinationService.createDestinationIntoDB(req.body, req.user?.id);
 
   sendResponse(res, {
     statusCode: httpStatus.CREATED,
@@ -15,13 +15,14 @@ const createDestination = catchAsync(async (req, res) => {
 });
 
 const getAllDestinations = catchAsync(async (req, res) => {
-  const result = await DestinationService.getAllDestinationsFromDB(req.query);
+  const result = await DestinationService.getAllDestinationsFromDB(req.query, req.user);
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
     message: 'Destinations retrieved successfully',
-    data: result,
+    meta: result.meta,
+    data: result.data,
   });
 });
 
@@ -39,7 +40,7 @@ const getSingleDestination = catchAsync(async (req, res) => {
 
 const updateDestination = catchAsync(async (req, res) => {
   const { id } = req.params;
-  const result = await DestinationService.updateDestinationInDB(id as string, req.body);
+  const result = await DestinationService.updateDestinationInDB(id as string, req.body, req.user);
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
@@ -51,7 +52,7 @@ const updateDestination = catchAsync(async (req, res) => {
 
 const deleteDestination = catchAsync(async (req, res) => {
   const { id } = req.params;
-  const result = await DestinationService.deleteDestinationFromDB(id as string);
+  const result = await DestinationService.deleteDestinationFromDB(id as string, req.user);
 
   sendResponse(res, {
     statusCode: httpStatus.OK,

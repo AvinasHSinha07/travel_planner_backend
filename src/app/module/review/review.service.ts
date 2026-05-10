@@ -91,7 +91,7 @@ const getDestinationReviewsFromDB = async (
       total,
       page: safePage,
       limit: safeLimit,
-      totalPages: Math.ceil(total / safeLimit) || 1,
+      totalPage: Math.ceil(total / safeLimit) || 1,
     },
   };
 };
@@ -101,12 +101,17 @@ const listAllReviewsForAdminFromDB = async (opts: {
   limit: number;
   destinationId?: string;
   search?: string;
-}) => {
+}, user?: any) => {
   const safeLimit = Math.min(Math.max(opts.limit, 1), 100);
   const safePage = Math.max(opts.page, 1);
   const skip = (safePage - 1) * safeLimit;
 
   const where: Prisma.ReviewWhereInput = {};
+
+  if (user?.role === 'TRAVEL_AGENT') {
+    where.destination = { creatorId: user.id };
+  }
+
   if (opts.destinationId) where.destinationId = opts.destinationId;
   if (opts.search?.trim()) {
     where.comment = { contains: opts.search.trim(), mode: 'insensitive' };
@@ -132,18 +137,24 @@ const listAllReviewsForAdminFromDB = async (opts: {
       total,
       page: safePage,
       limit: safeLimit,
-      totalPages: Math.ceil(total / safeLimit) || 1,
+      totalPage: Math.ceil(total / safeLimit) || 1,
     },
   };
 };
 
-const deleteReviewByIdFromDB = async (reviewId: string) => {
+const deleteReviewByIdFromDB = async (reviewId: string, user?: any) => {
   const review = await prisma.review.findUnique({
     where: { id: reviewId },
-    select: { id: true, destinationId: true },
+    include: { destination: { select: { creatorId: true } } },
   });
   if (!review) {
     throw new AppError(httpStatus.NOT_FOUND, 'Review not found');
+  }
+
+  if (user?.role === 'TRAVEL_AGENT') {
+    if (review.destination.creatorId !== user.id) {
+      throw new AppError(httpStatus.FORBIDDEN, 'Unauthorized to delete this review');
+    }
   }
 
   await prisma.review.delete({

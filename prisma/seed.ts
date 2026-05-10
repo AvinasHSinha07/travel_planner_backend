@@ -30,8 +30,8 @@ async function main() {
 
   const admin = await auth.api.signUpEmail({
     body: {
-      email: 'admin@planora.com',
-      password: 'password12345',
+      email: 'admin@tripplanner.com',
+      password: 'password123',
       name: 'Alexander Pierce',
       role: Role.ADMIN,
       avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Alexander',
@@ -41,8 +41,8 @@ async function main() {
 
   const agent = await auth.api.signUpEmail({
     body: {
-      email: 'agent@planora.com',
-      password: 'password12345',
+      email: 'agent@tripplanner.com',
+      password: 'password123',
       name: 'Sarah Connor',
       role: Role.TRAVEL_AGENT,
       avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah',
@@ -52,8 +52,8 @@ async function main() {
 
   const traveler = await auth.api.signUpEmail({
     body: {
-      email: 'user@planora.com',
-      password: 'password12345',
+      email: 'user@tripplanner.com',
+      password: 'password123',
       name: 'John Doe',
       role: Role.USER,
       avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=John',
@@ -95,6 +95,7 @@ async function main() {
         'https://images.unsplash.com/photo-1533105079780-92b9be482077'
       ],
       tags: ['Romance', 'Ocean', 'History'],
+      creatorId: agent.user.id,
     },
     {
       name: 'Bali',
@@ -111,6 +112,7 @@ async function main() {
         'https://images.unsplash.com/photo-1518548419970-58e3b4079ab2'
       ],
       tags: ['Spirituality', 'Nature', 'Adventure'],
+      creatorId: agent.user.id,
     },
     {
       name: 'Swiss Alps',
@@ -127,6 +129,7 @@ async function main() {
         'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b'
       ],
       tags: ['Snow', 'Skiing', 'Nature'],
+      creatorId: admin.user.id,
     },
     {
       name: 'Dubai',
@@ -143,6 +146,7 @@ async function main() {
         'https://images.unsplash.com/photo-1526495124232-a02e18494d17'
       ],
       tags: ['Luxury', 'Modern', 'Shopping'],
+      creatorId: admin.user.id,
     },
     {
       name: 'Kyoto',
@@ -159,6 +163,7 @@ async function main() {
         'https://images.unsplash.com/photo-1528164344705-47542687990d'
       ],
       tags: ['Zen', 'Temple', 'Culture'],
+      creatorId: admin.user.id,
     },
   ];
 
@@ -191,6 +196,7 @@ async function main() {
       duration: '5 hours',
       rating: 4.9,
       images: ['https://images.unsplash.com/photo-1534351590666-13e3e96b5017'],
+      creatorId: agent.user.id,
     },
     {
       destinationId: destinations[1].id, // Bali
@@ -201,6 +207,7 @@ async function main() {
       duration: '4 hours',
       rating: 4.7,
       images: ['https://images.unsplash.com/photo-1537996194471-e657df975ab4'],
+      creatorId: agent.user.id,
     },
     {
       destinationId: destinations[2].id, // Swiss Alps
@@ -211,6 +218,7 @@ async function main() {
       duration: '30 mins',
       rating: 5.0,
       images: ['https://images.unsplash.com/photo-1531310197839-ccf54634509e'],
+      creatorId: admin.user.id,
     },
   ];
 
@@ -230,6 +238,7 @@ async function main() {
       location: 'Oia, Santorini',
       amenities: ['Infinity Pool', 'Wine Cellar', 'Private Terrace'],
       images: ['https://images.unsplash.com/photo-1515404929826-76fff9fef204'],
+      creatorId: agent.user.id,
     },
     {
       destinationId: destinations[3].id, // Dubai
@@ -240,6 +249,7 @@ async function main() {
       location: 'Jumeirah Street, Dubai',
       amenities: ['Private Butler', 'Gold-plated iPads', 'Helipad'],
       images: ['https://images.unsplash.com/photo-1582719478250-c89cae4dc85b'],
+      creatorId: admin.user.id,
     },
   ];
 

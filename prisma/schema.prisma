@@ -31,6 +31,10 @@ model User {
   preferences      TravelPreference?
   savedDestinations SavedDestination[]
 
+  createdDestinations Destination[] @relation("UserCreatedDestinations")
+  createdActivities   Activity[]    @relation("UserCreatedActivities")
+  createdAccommodations Accommodation[] @relation("UserCreatedAccommodations")
+
   @@map("user")
 }
 
@@ -98,15 +102,18 @@ model Destination {
   latitude       Float?
   longitude      Float?
   isFeatured     Boolean         @default(false)
+  creatorId      String?
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
 
+  creator        User?           @relation("UserCreatedDestinations", fields: [creatorId], references: [id])
   activities     Activity[]
   accommodations Accommodation[]
   reviews        Review[]
   trips          Trip[]
   stats          DestinationStats?
   savedBy        SavedDestination[]
+  bookings       Booking[]
 
   @@map("destination")
 }
@@ -177,10 +184,13 @@ model Activity {
   rating         Float           @default(0)
   images         String[]
   location       String?
+  creatorId      String?
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
 
+  creator        User?           @relation("UserCreatedActivities", fields: [creatorId], references: [id])
   destination    Destination     @relation(fields: [destinationId], references: [id], onDelete: Cascade)
+  bookings       Booking[]
 
   @@map("activity")
 }
@@ -195,10 +205,13 @@ model Accommodation {
   amenities      String[]
   images         String[]
   location       String?
+  creatorId      String?
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
 
+  creator        User?             @relation("UserCreatedAccommodations", fields: [creatorId], references: [id])
   destination    Destination       @relation(fields: [destinationId], references: [id], onDelete: Cascade)
+  bookings       Booking[]
 
   @@map("accommodation")
 }
@@ -213,11 +226,17 @@ model Booking {
   stripeSessionId        String?       @unique
   stripePaymentIntentId  String?       @unique
   metadata               Json?
+  destinationId          String?
+  activityId             String?
+  accommodationId        String?
   createdAt              DateTime      @default(now())
   updatedAt              DateTime      @updatedAt
 
   user                   User          @relation(fields: [userId], references: [id])
   trip                   Trip?         @relation(fields: [tripId], references: [id])
+  destination            Destination?  @relation(fields: [destinationId], references: [id])
+  activity               Activity?     @relation(fields: [activityId], references: [id])
+  accommodation          Accommodation? @relation(fields: [accommodationId], references: [id])
 
   @@map("booking")
 }

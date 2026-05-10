@@ -57,4 +57,27 @@ const requireAuth = (...requiredRoles: Role[]) => {
   });
 };
 
+export const optionalAuth = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+  const session = await auth.api.getSession({
+    headers: fromNodeHeaders(req.headers),
+  });
+
+  if (session) {
+    const dbUser = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { id: true, email: true, name: true, role: true, isSuspended: true },
+    });
+
+    if (dbUser && !dbUser.isSuspended) {
+      req.user = {
+        id: dbUser.id,
+        email: dbUser.email,
+        name: dbUser.name,
+        role: dbUser.role as Role,
+      };
+    }
+  }
+  next();
+});
+
 export default requireAuth;

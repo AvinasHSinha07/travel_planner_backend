@@ -33,7 +33,7 @@ const createBookingIntoDB = async (userId: string, payload: any) => {
     throw new AppError(503, 'Payments are not configured (missing STRIPE_SECRET_KEY).');
   }
 
-  const { tripId, destinationId, type, totalAmount } = payload;
+  const { tripId, destinationId, activityId, accommodationId, type, totalAmount } = payload;
 
   const metadata: Prisma.InputJsonValue =
     destinationId != null ? { destinationId } : {};
@@ -42,6 +42,9 @@ const createBookingIntoDB = async (userId: string, payload: any) => {
     data: {
       userId,
       tripId: tripId ?? null,
+      destinationId: destinationId ?? null,
+      activityId: activityId ?? null,
+      accommodationId: accommodationId ?? null,
       type,
       totalAmount,
       status: BookingStatus.PENDING,
@@ -90,12 +93,43 @@ const createBookingIntoDB = async (userId: string, payload: any) => {
   };
 };
 
-const getMyBookingsFromDB = async (userId: string) => {
-  return prisma.booking.findMany({
-    where: { userId },
-    include: bookingInclude,
-    orderBy: { createdAt: 'desc' },
-  });
+const getMyBookingsFromDB = async (userId: string, query: any) => {
+  const { searchTerm, status, type, page = 1, limit = 10 } = query;
+  const skip = (Number(page) - 1) * Number(limit);
+  const take = Number(limit);
+
+  const whereConditions: Prisma.BookingWhereInput = { userId };
+
+  if (searchTerm) {
+    whereConditions.OR = [
+      { id: { contains: searchTerm, mode: 'insensitive' } },
+      { trip: { destination: { name: { contains: searchTerm, mode: 'insensitive' } } } },
+    ];
+  }
+
+  if (status) whereConditions.status = status;
+  if (type) whereConditions.type = type;
+
+  const [result, total] = await Promise.all([
+    prisma.booking.findMany({
+      where: whereConditions,
+      include: bookingInclude,
+      orderBy: { createdAt: 'desc' },
+      skip,
+      take,
+    }),
+    prisma.booking.count({ where: whereConditions }),
+  ]);
+
+  return {
+    meta: {
+      page: Number(page),
+      limit: Number(limit),
+      total,
+      totalPage: Math.ceil(total / Number(limit)),
+    },
+    data: result,
+  };
 };
 
 type StaffBookingQuery = {
@@ -105,10 +139,19 @@ type StaffBookingQuery = {
   limit: number;
 };
 
-const getStaffBookingsFromDB = async (q: StaffBookingQuery) => {
+const getStaffBookingsFromDB = async (q: StaffBookingQuery, user?: any) => {
   const where: Prisma.BookingWhereInput = {};
   if (q.status) where.status = q.status;
   if (q.type) where.type = q.type;
+
+  if (user?.role === 'TRAVEL_AGENT') {
+    where.OR = [
+      { destination: { creatorId: user.id } },
+      { activity: { creatorId: user.id } },
+      { accommodation: { creatorId: user.id } },
+      { trip: { destination: { creatorId: user.id } } },
+    ];
+  }
 
   const skip = (q.page - 1) * q.limit;
 
@@ -129,7 +172,7 @@ const getStaffBookingsFromDB = async (q: StaffBookingQuery) => {
       total,
       page: q.page,
       limit: q.limit,
-      totalPages: Math.ceil(total / q.limit) || 1,
+      totalPage: Math.ceil(total / q.limit) || 1,
     },
   };
 };
@@ -249,9 +292,33 @@ const handleStripeWebhook = async (rawBody: Buffer, signature: string | string[]
 const updateBookingStatusInDB = async (
   bookingId: string,
   status: BookingStatus,
-  actorRole: Role,
+  user: any,
 ) => {
-  if (actorRole !== Role.ADMIN && actorRole !== Role.TRAVEL_AGENT) {
+  if (user.role === Role.TRAVEL_AGENT) {
+    const booking = await prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: {
+        destination: true,
+        activity: true,
+        accommodation: true,
+        trip: { include: { destination: true } },
+      },
+    });
+
+    if (!booking) {
+      throw new AppError(404, 'Booking not found');
+    }
+
+    const isOwner =
+      booking.destination?.creatorId === user.id ||
+      booking.activity?.creatorId === user.id ||
+      booking.accommodation?.creatorId === user.id ||
+      booking.trip?.destination?.creatorId === user.id;
+
+    if (!isOwner) {
+      throw new AppError(403, 'Unauthorized to update this booking');
+    }
+  } else if (user.role !== Role.ADMIN) {
     throw new AppError(403, 'You do not have permission to update booking status');
   }
 

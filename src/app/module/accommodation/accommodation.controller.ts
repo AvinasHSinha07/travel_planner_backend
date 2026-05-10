@@ -5,7 +5,7 @@ import sendResponse from '../../utils/sendResponse';
 import { AccommodationService } from './accommodation.service';
 
 const createAccommodation = catchAsync(async (req, res) => {
-  const result = await AccommodationService.createAccommodationIntoDB(req.body);
+  const result = await AccommodationService.createAccommodationIntoDB(req.body, req.user?.id);
 
   sendResponse(res, {
     statusCode: httpStatus.CREATED,
@@ -33,13 +33,14 @@ const listAccommodations = catchAsync(async (req, res) => {
     sortBy: (q.sortBy as 'name' | 'pricePerNight' | 'createdAt' | 'rating' | 'type') || 'createdAt',
     sortOrder: (q.sortOrder as 'asc' | 'desc') || 'desc',
     search: q.search,
-  });
+  }, req.user);
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
     message: 'Accommodations retrieved successfully',
-    data: result,
+    meta: result.meta,
+    data: result.items,
   });
 });
 
@@ -57,7 +58,7 @@ const getDestinationAccommodations = catchAsync(async (req, res) => {
 
 const updateAccommodation = catchAsync(async (req, res) => {
   const { id } = req.params;
-  const result = await AccommodationService.updateAccommodationInDB(id as string, req.body);
+  const result = await AccommodationService.updateAccommodationInDB(id as string, req.body, req.user);
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
@@ -69,7 +70,7 @@ const updateAccommodation = catchAsync(async (req, res) => {
 
 const deleteAccommodation = catchAsync(async (req, res) => {
   const { id } = req.params;
-  await AccommodationService.deleteAccommodationFromDB(id as string);
+  await AccommodationService.deleteAccommodationFromDB(id as string, req.user);
 
   sendResponse(res, {
     statusCode: httpStatus.OK,

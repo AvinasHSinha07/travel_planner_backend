@@ -1,6 +1,6 @@
 import express from 'express';
 import { Role } from '@prisma/client';
-import requireAuth from '../../middleware/auth';
+import requireAuth, { optionalAuth } from '../../middleware/auth';
 import validateRequest from '../../middleware/validateRequest';
 import { DestinationController } from './destination.controller';
 import { DestinationValidation } from './destination.validation';
@@ -14,7 +14,7 @@ router.post(
   DestinationController.createDestination,
 );
 
-router.get('/', DestinationController.getAllDestinations);
+router.get('/', optionalAuth, DestinationController.getAllDestinations);
 
 router.get('/:id', DestinationController.getSingleDestination);
 
@@ -27,7 +27,7 @@ router.patch(
 
 router.delete(
   '/:id',
-  requireAuth(Role.ADMIN),
+  requireAuth(Role.ADMIN, Role.TRAVEL_AGENT),
   DestinationController.deleteDestination,
 );
 

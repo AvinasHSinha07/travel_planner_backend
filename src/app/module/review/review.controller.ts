@@ -25,7 +25,8 @@ const getDestinationReviews = catchAsync(async (req, res) => {
     statusCode: httpStatus.OK,
     success: true,
     message: 'Reviews retrieved successfully',
-    data: result,
+    meta: result.meta,
+    data: result.items,
   });
 });
 
@@ -40,19 +41,20 @@ const adminListReviews = catchAsync(async (req, res) => {
     limit,
     destinationId,
     search,
-  });
+  }, req.user);
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
     message: 'Reviews retrieved successfully',
-    data: result,
+    meta: result.meta,
+    data: result.items,
   });
 });
 
 const deleteReview = catchAsync(async (req, res) => {
   const { reviewId } = req.params;
-  const result = await ReviewService.deleteReviewByIdFromDB(reviewId as string);
+  const result = await ReviewService.deleteReviewByIdFromDB(reviewId as string, req.user);
 
   sendResponse(res, {
     statusCode: httpStatus.OK,

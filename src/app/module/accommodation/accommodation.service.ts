@@ -1,8 +1,8 @@
 import { AccommodationType, Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 
-const createAccommodationIntoDB = async (payload: Prisma.AccommodationUncheckedCreateInput) => {
-  return prisma.accommodation.create({ data: payload });
+const createAccommodationIntoDB = async (payload: Prisma.AccommodationUncheckedCreateInput, creatorId?: string) => {
+  return prisma.accommodation.create({ data: { ...payload, creatorId } });
 };
 
 const listAccommodationsFromDB = async (q: {
@@ -13,11 +13,15 @@ const listAccommodationsFromDB = async (q: {
   sortOrder: 'asc' | 'desc';
   search?: string;
   type?: AccommodationType;
-}) => {
+}, user?: any) => {
   const take = Math.min(Math.max(q.limit, 1), 100);
   const skip = (Math.max(q.page, 1) - 1) * take;
 
   const where: Prisma.AccommodationWhereInput = {};
+  
+  if (user?.role === 'TRAVEL_AGENT' && q.isManagement === 'true') {
+    where.creatorId = user.id;
+  }
   if (q.destinationId) where.destinationId = q.destinationId;
   if (q.type) where.type = q.type;
   if (q.search?.trim()) {
@@ -50,7 +54,7 @@ const listAccommodationsFromDB = async (q: {
       total,
       page: q.page,
       limit: take,
-      totalPages: Math.ceil(total / take) || 1,
+      totalPage: Math.ceil(total / take) || 1,
     },
   };
 };
@@ -62,7 +66,14 @@ const getDestinationAccommodationsFromDB = async (destinationId: string) => {
   });
 };
 
-const updateAccommodationInDB = async (id: string, payload: Prisma.AccommodationUpdateInput) => {
+const updateAccommodationInDB = async (id: string, payload: Prisma.AccommodationUpdateInput, user?: any) => {
+  if (user?.role === 'TRAVEL_AGENT') {
+    const acc = await prisma.accommodation.findUnique({ where: { id } });
+    if (!acc || acc.creatorId !== user.id) {
+      throw new Error('Unauthorized or Accommodation not found');
+    }
+  }
+
   return prisma.accommodation.update({
     where: { id },
     data: payload,
@@ -72,7 +83,13 @@ const updateAccommodationInDB = async (id: string, payload: Prisma.Accommodation
   });
 };
 
-const deleteAccommodationFromDB = async (id: string) => {
+const deleteAccommodationFromDB = async (id: string, user?: any) => {
+  if (user?.role === 'TRAVEL_AGENT') {
+    const acc = await prisma.accommodation.findUnique({ where: { id } });
+    if (!acc || acc.creatorId !== user.id) {
+      throw new Error('Unauthorized or Accommodation not found');
+    }
+  }
   return prisma.accommodation.delete({ where: { id } });
 };
 

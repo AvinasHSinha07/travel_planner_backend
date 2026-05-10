@@ -1,9 +1,9 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 
-const createActivityIntoDB = async (payload: Prisma.ActivityUncheckedCreateInput) => {
+const createActivityIntoDB = async (payload: Prisma.ActivityUncheckedCreateInput, creatorId?: string) => {
   return prisma.activity.create({
-    data: payload,
+    data: { ...payload, creatorId },
   });
 };
 
@@ -14,11 +14,15 @@ const listActivitiesFromDB = async (q: {
   sortBy: 'name' | 'price' | 'createdAt' | 'rating' | 'type';
   sortOrder: 'asc' | 'desc';
   search?: string;
-}) => {
+}, user?: any) => {
   const take = Math.min(Math.max(q.limit, 1), 100);
   const skip = (Math.max(q.page, 1) - 1) * take;
 
   const where: Prisma.ActivityWhereInput = {};
+  
+  if (user?.role === 'TRAVEL_AGENT' && q.isManagement === 'true') {
+    where.creatorId = user.id;
+  }
   if (q.destinationId) where.destinationId = q.destinationId;
   if (q.search?.trim()) {
     where.OR = [
@@ -51,7 +55,7 @@ const listActivitiesFromDB = async (q: {
       total,
       page: q.page,
       limit: take,
-      totalPages: Math.ceil(total / take) || 1,
+      totalPage: Math.ceil(total / take) || 1,
     },
   };
 };
@@ -63,7 +67,14 @@ const getDestinationActivitiesFromDB = async (destinationId: string) => {
   });
 };
 
-const updateActivityInDB = async (id: string, payload: Prisma.ActivityUpdateInput) => {
+const updateActivityInDB = async (id: string, payload: Prisma.ActivityUpdateInput, user?: any) => {
+  if (user?.role === 'TRAVEL_AGENT') {
+    const act = await prisma.activity.findUnique({ where: { id } });
+    if (!act || act.creatorId !== user.id) {
+      throw new Error('Unauthorized or Activity not found');
+    }
+  }
+
   return prisma.activity.update({
     where: { id },
     data: payload,
@@ -73,7 +84,13 @@ const updateActivityInDB = async (id: string, payload: Prisma.ActivityUpdateInpu
   });
 };
 
-const deleteActivityFromDB = async (id: string) => {
+const deleteActivityFromDB = async (id: string, user?: any) => {
+  if (user?.role === 'TRAVEL_AGENT') {
+    const act = await prisma.activity.findUnique({ where: { id } });
+    if (!act || act.creatorId !== user.id) {
+      throw new Error('Unauthorized or Activity not found');
+    }
+  }
   return prisma.activity.delete({ where: { id } });
 };
 

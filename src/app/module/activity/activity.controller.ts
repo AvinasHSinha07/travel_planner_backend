@@ -4,7 +4,7 @@ import sendResponse from '../../utils/sendResponse';
 import { ActivityService } from './activity.service';
 
 const createActivity = catchAsync(async (req, res) => {
-  const result = await ActivityService.createActivityIntoDB(req.body);
+  const result = await ActivityService.createActivityIntoDB(req.body, req.user?.id);
 
   sendResponse(res, {
     statusCode: httpStatus.CREATED,
@@ -30,13 +30,14 @@ const listActivities = catchAsync(async (req, res) => {
     sortBy: (q.sortBy as 'name' | 'price' | 'createdAt' | 'rating' | 'type') || 'createdAt',
     sortOrder: (q.sortOrder as 'asc' | 'desc') || 'desc',
     search: q.search,
-  });
+  }, req.user);
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
     message: 'Activities retrieved successfully',
-    data: result,
+    meta: result.meta,
+    data: result.items,
   });
 });
 
@@ -54,7 +55,7 @@ const getDestinationActivities = catchAsync(async (req, res) => {
 
 const updateActivity = catchAsync(async (req, res) => {
   const { id } = req.params;
-  const result = await ActivityService.updateActivityInDB(id as string, req.body);
+  const result = await ActivityService.updateActivityInDB(id as string, req.body, req.user);
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
@@ -66,7 +67,7 @@ const updateActivity = catchAsync(async (req, res) => {
 
 const deleteActivity = catchAsync(async (req, res) => {
   const { id } = req.params;
-  await ActivityService.deleteActivityFromDB(id as string);
+  await ActivityService.deleteActivityFromDB(id as string, req.user);
 
   sendResponse(res, {
     statusCode: httpStatus.OK,

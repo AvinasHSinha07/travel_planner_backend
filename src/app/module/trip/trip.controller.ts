@@ -18,13 +18,14 @@ const createTrip = catchAsync(async (req, res) => {
 
 const getMyTrips = catchAsync(async (req, res) => {
   const userId = req.user?.id as string;
-  const result = await TripService.getMyTripsFromDB(userId);
+  const result = await TripService.getMyTripsFromDB(userId, req.query);
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
     message: 'Trips retrieved successfully',
-    data: result,
+    meta: result.meta,
+    data: result.data,
   });
 });
 

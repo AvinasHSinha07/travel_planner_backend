@@ -55,7 +55,7 @@ const getAllUsersForAdminFromDB = async (opts: {
       total,
       page: opts.page,
       limit: take,
-      totalPages: Math.ceil(total / take) || 1,
+      totalPage: Math.ceil(total / take) || 1,
     },
   };
 };
@@ -109,25 +109,56 @@ const updateMyProfileInDB = async (userId: string, payload: any) => {
 };
 
 const getDashboardStatsFromDB = async (userId: string, role: string) => {
-  /** Staff overview: same aggregates the main dashboard cards expect for ADMIN + TRAVEL_AGENT */
-  if (role === Role.ADMIN || role === Role.TRAVEL_AGENT) {
+  if (role === Role.ADMIN) {
     const [totalUsers, totalDestinations, totalBookings, totalRevenue] = await Promise.all([
       prisma.user.count(),
       prisma.destination.count(),
       prisma.booking.count(),
       prisma.booking.aggregate({
-        _sum: {
-          totalAmount: true,
-        },
-        where: {
-          status: 'CONFIRMED',
-        },
+        _sum: { totalAmount: true },
+        where: { status: 'CONFIRMED' },
       }),
     ]);
 
     return {
       totalUsers,
       totalDestinations,
+      totalBookings,
+      totalRevenue: totalRevenue._sum.totalAmount || 0,
+    };
+  } else if (role === Role.TRAVEL_AGENT) {
+    const [totalDestinations, totalActivities, totalAccommodations, totalBookings, totalRevenue] = await Promise.all([
+      prisma.destination.count({ where: { creatorId: userId } }),
+      prisma.activity.count({ where: { creatorId: userId } }),
+      prisma.accommodation.count({ where: { creatorId: userId } }),
+      prisma.booking.count({
+        where: {
+          OR: [
+            { destination: { creatorId: userId } },
+            { activity: { creatorId: userId } },
+            { accommodation: { creatorId: userId } },
+            { trip: { destination: { creatorId: userId } } },
+          ],
+        },
+      }),
+      prisma.booking.aggregate({
+        _sum: { totalAmount: true },
+        where: {
+          status: 'CONFIRMED',
+          OR: [
+            { destination: { creatorId: userId } },
+            { activity: { creatorId: userId } },
+            { accommodation: { creatorId: userId } },
+            { trip: { destination: { creatorId: userId } } },
+          ],
+        },
+      }),
+    ]);
+
+    return {
+      totalDestinations,
+      totalActivities,
+      totalAccommodations,
       totalBookings,
       totalRevenue: totalRevenue._sum.totalAmount || 0,
     };
