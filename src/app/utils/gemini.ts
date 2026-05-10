@@ -1,14 +1,28 @@
 import { GoogleGenerativeAI, GenerativeModel } from '@google/generative-ai';
 import { env } from '../config/env';
+import { createHash } from 'crypto';
 
 // Support multiple API keys for rotation
-export const apiKeys = (env.GEMINI_API_KEY || '').split(',').map(k => k.trim()).filter(Boolean);
+const rawKeys = process.env.GEMINI_API_KEY || env.GEMINI_API_KEY || '';
+export const apiKeys = rawKeys.split(',').map(k => k.trim()).filter(k => k.startsWith('AIza'));
 export let currentKeyIndex = 0;
+
 export const setCurrentKeyIndex = (index: number) => {
   currentKeyIndex = index;
 };
 
-export const genAI = new GoogleGenerativeAI(apiKeys[0] || '');
+// Model IDs: Using most stable models for production
+export const MODELS = {
+  flash: [
+    'gemini-1.5-flash',
+    'gemini-1.5-flash-8b',
+    'gemini-2.0-flash',
+  ],
+  pro: [
+    'gemini-1.5-pro',
+    'gemini-2.0-pro-exp-02-05',
+  ],
+};
 
 // Helper to get a GoogleGenerativeAI instance with a specific key index
 export const getGenAIInstance = (index: number) => {
@@ -16,20 +30,7 @@ export const getGenAIInstance = (index: number) => {
   return new GoogleGenerativeAI(key);
 };
 
-// Model IDs: 2.5 is primary, with 2.0 and 1.5 as fallbacks
-export const MODELS = {
-  flash: [
-    process.env.GEMINI_FLASH_MODEL?.trim() || 'gemini-2.5-flash',
-    'gemini-2.0-flash-exp',
-    'gemini-1.5-flash',
-    'gemini-1.5-flash-8b',
-  ],
-  pro: [
-    process.env.GEMINI_PRO_MODEL?.trim() || 'gemini-2.5-pro',
-    'gemini-2.0-pro-exp',
-    'gemini-1.5-pro',
-  ],
-};
+export const genAI = getGenAIInstance(currentKeyIndex);
 
 // For backward compatibility, but these will use the first key
 export const geminiModel = new GoogleGenerativeAI(apiKeys[currentKeyIndex] || '').getGenerativeModel({ model: MODELS.flash[0] });
