@@ -13,37 +13,37 @@ export const setCurrentKeyIndex = (index: number) => {
 
 console.log(`[GEMINI] Multi-key rotation initialized with ${apiKeys.length} keys.`);
 
-// Model IDs: Prioritizing stability and latest available versions
+// Model IDs: Prioritizing stability and latest available versions (2026 Series)
 export const MODELS = {
   flash: [
-    'gemini-1.5-flash-latest',
-    'gemini-2.0-flash-exp',
-    'gemini-2.0-flash-lite-preview-02-05',
-    'gemini-1.5-flash',
-    'gemini-1.5-flash-8b-latest',
     'gemini-3.1-flash-lite',
+    'gemini-3.1-flash-lite-preview',
+    'gemini-3.1-flash-image-preview',
+    'gemini-2.5-flash',
     'gemini-2.5-flash-lite',
+    'gemini-2.5-flash-preview',
+    'gemini-2.0-flash',
+    'gemini-2.0-flash-lite',
   ],
   pro: [
-    'gemini-1.5-pro-latest',
-    'gemini-2.0-pro-exp-02-05',
-    'gemini-1.5-pro',
+    'gemini-3.1-pro-preview',
     'gemini-2.5-pro',
+    'gemini-1.5-pro',
   ],
 };
-
 
 export const getGenAIInstance = (index: number) => {
   const key = apiKeys[index] || apiKeys[0] || '';
   return new GoogleGenerativeAI(key);
 };
 
-export const genAI = getGenAIInstance(currentKeyIndex);
+// Dynamic model getters to ensure they always use the current active key
+export const getGeminiModel = (modelId?: string) => {
+  const genAI = getGenAIInstance(currentKeyIndex);
+  return genAI.getGenerativeModel({ model: modelId || MODELS.flash[0] });
+};
 
-// For backward compatibility, but these will use the first key
-export const geminiModel = new GoogleGenerativeAI(apiKeys[currentKeyIndex] || '').getGenerativeModel({ model: MODELS.flash[0] });
-export const geminiProModel = new GoogleGenerativeAI(apiKeys[currentKeyIndex] || '').getGenerativeModel({ model: MODELS.pro[0] });
-export const geminiVisionModel = new GoogleGenerativeAI(apiKeys[currentKeyIndex] || '').getGenerativeModel({ model: MODELS.flash[0] });
+export const getGeminiProModel = () => getGeminiModel(MODELS.pro[0]);
 
 // Helper function with fallback and key rotation
 export async function callGeminiWithFallback(
@@ -60,7 +60,7 @@ export async function callGeminiWithFallback(
     ? [...MODELS.pro, ...MODELS.flash] 
     : [...MODELS.flash, ...MODELS.pro];
   
-  let lastError: Error | null = null;
+  let lastError: any = null;
   
   // Try each API key
   for (let keyAttempt = 0; keyAttempt < apiKeys.length; keyAttempt++) {
@@ -72,7 +72,13 @@ export async function callGeminiWithFallback(
       try {
         console.log(`[GEMINI] Attempting ${modelId} with Key ${activeKeyIndex + 1}/${apiKeys.length}`);
         const model = currentGenAI.getGenerativeModel({ model: modelId });
-        const result = await model.generateContent(prompt);
+        
+        // Add a reasonable timeout for the request
+        const result = await Promise.race([
+          model.generateContent(prompt),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Request timeout')), 30000))
+        ]) as any;
+
         const response = await result.response;
         const text = response.text();
         
@@ -86,11 +92,29 @@ export async function callGeminiWithFallback(
       } catch (error: any) {
         lastError = error;
         const message = error?.message || '';
+        const status = error?.status || 0;
         
         console.warn(`[GEMINI] ${modelId} (Key ${activeKeyIndex + 1}) failed:`, message);
         
-        // If it's a 429 (Quota), we should still try other models because they might have different quotas
-        // If it's a 404 (Not Found), we definitely try the next one
+        // If it's a 404 (Not Found), it might be an invalid model name, try next model
+        if (status === 404 || message.includes('404') || message.includes('not found')) {
+          continue;
+        }
+
+        // If it's a 400 (Bad Request) with "location not supported", try next model 
+        // (sometimes different models have different regional availability)
+        if (message.includes('location is not supported')) {
+          continue;
+        }
+
+        // If it's a 429 (Quota), we should try the next key for the same model if possible,
+        // or just move to the next key entirely to save time.
+        if (status === 429 || message.includes('429') || message.toLowerCase().includes('quota')) {
+          console.warn(`[GEMINI] Key ${activeKeyIndex + 1} exhausted. Moving to next key...`);
+          break; // Break the model loop, try next key
+        }
+        
+        // For other errors, try the next model with the same key
         continue;
       }
     }
@@ -107,6 +131,17 @@ export type GeminiCaptionResult = {
   detectedLocation?: string;
   tags: string[];
   suggestedHashtags: string[];
+};
+
+// For backward compatibility, these are now functions or proxies that use the current active key
+export const geminiModel = {
+  generateContent: (p: any) => getGeminiModel().generateContent(p),
+};
+export const geminiProModel = {
+  generateContent: (p: any) => getGeminiProModel().generateContent(p),
+};
+export const geminiVisionModel = {
+  generateContent: (p: any) => getGeminiModel().generateContent(p),
 };
 
 /** Fetch a remote image and return base64 + mime type for Gemini vision. */
@@ -142,22 +177,54 @@ export async function captionTravelImageWithGemini(imageUrl: string): Promise<Ge
   "tags": ["5-7 short lowercase tags"],
   "suggestedHashtags": ["#Example", "#Travel"]
 }`;
-    const result = await geminiVisionModel.generateContent([
-      { text: prompt },
-      { inlineData: { mimeType, data } },
-    ]);
-    const text = (await result.response).text();
-    const parsed = extractJSONFromResponse(text);
-    return {
-      caption: String(parsed.caption ?? ''),
-      detectedLocation: parsed.detectedLocation
-        ? String(parsed.detectedLocation)
-        : undefined,
-      tags: Array.isArray(parsed.tags) ? parsed.tags.map(String) : [],
-      suggestedHashtags: Array.isArray(parsed.suggestedHashtags)
-        ? parsed.suggestedHashtags.map(String)
-        : [],
-    };
+
+    let lastError: any = null;
+    for (let keyAttempt = 0; keyAttempt < apiKeys.length; keyAttempt++) {
+      const activeKeyIndex = (currentKeyIndex + keyAttempt) % apiKeys.length;
+      const currentGenAI = new GoogleGenerativeAI(apiKeys[activeKeyIndex]);
+      
+      // Try a few models that support vision (2026 Series)
+      const visionModels = [
+        'gemini-3.1-flash-image-preview',
+        'gemini-3.1-flash-lite',
+        'gemini-2.5-flash',
+        'gemini-2.0-flash'
+      ];
+      
+      for (const modelId of visionModels) {
+        try {
+          console.log(`[GEMINI-VISION] Attempting ${modelId} with Key ${activeKeyIndex + 1}/${apiKeys.length}`);
+          const model = currentGenAI.getGenerativeModel({ model: modelId });
+          const result = await model.generateContent([
+            { text: prompt },
+            { inlineData: { mimeType, data } },
+          ]);
+          const resText = (await result.response).text();
+          const parsed = extractJSONFromResponse(resText);
+          setCurrentKeyIndex(activeKeyIndex);
+          return {
+            caption: String(parsed.caption ?? ''),
+            detectedLocation: parsed.detectedLocation
+              ? String(parsed.detectedLocation)
+              : undefined,
+            tags: Array.isArray(parsed.tags) ? parsed.tags.map(String) : [],
+            suggestedHashtags: Array.isArray(parsed.suggestedHashtags)
+              ? parsed.suggestedHashtags.map(String)
+              : [],
+          };
+        } catch (error: any) {
+          lastError = error;
+          const msg = error?.message || '';
+          console.warn(`[GEMINI-VISION] ${modelId} (Key ${activeKeyIndex + 1}) failed:`, msg);
+          
+          if (msg.includes('429') || msg.toLowerCase().includes('quota')) {
+            break; // Try next key
+          }
+          continue; // Try next model
+        }
+      }
+    }
+    throw lastError;
   } catch (error) {
     console.error('captionTravelImageWithGemini:', error);
     return {

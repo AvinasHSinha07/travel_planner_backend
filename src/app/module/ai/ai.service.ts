@@ -405,22 +405,34 @@ User: ${message}
         // Use a timeout for the stream request to avoid hanging
         const streamResult = await Promise.race([
           model.generateContentStream(prompt),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('Stream request timeout')), 10000))
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Stream request timeout')), 15000))
         ]) as any;
 
         let started = false;
-        for await (const chunk of streamResult.stream) {
-          if (!started) {
-            res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
-            res.setHeader('Cache-Control', 'no-cache');
-            res.setHeader('Connection', 'keep-alive');
-            (res as any).flushHeaders?.();
-            started = true;
+        try {
+          for await (const chunk of streamResult.stream) {
+            if (!started) {
+              res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+              res.setHeader('Cache-Control', 'no-cache');
+              res.setHeader('Connection', 'keep-alive');
+              (res as any).flushHeaders?.();
+              started = true;
+            }
+            const text = chunk.text();
+            if (text) {
+              res.write(`data: ${JSON.stringify({ text })}\n\n`);
+            }
           }
-          const text = chunk.text();
-          if (text) {
-            res.write(`data: ${JSON.stringify({ text })}\n\n`);
+        } catch (streamError: any) {
+          // If we already started streaming, we can't easily fallback to another key/model
+          // but we can try to close gracefully
+          console.error(`[GEMINI-STREAM] Error during streaming with ${modelId}:`, streamError);
+          if (started) {
+            res.write(`data: ${JSON.stringify({ error: 'stream_interrupted' })}\n\n`);
+            res.end();
+            return;
           }
+          throw streamError;
         }
 
         if (started) {
@@ -432,14 +444,21 @@ User: ${message}
       } catch (error: any) {
         lastError = error;
         const msg = error?.message || 'Unknown error';
+        const status = error?.status || 0;
         console.warn(`[GEMINI-STREAM] ${modelId} (Key ${activeKeyIndex + 1}) failed:`, msg);
 
-        // If the error is a quota error (429), we might want to try the next key immediately for this model
-        if (msg.includes('429') || msg.toLowerCase().includes('quota')) {
-          break; // Break model loop, try next key
+        // If it's a 404 or location error, try next model
+        if (status === 404 || msg.includes('404') || msg.includes('not found') || msg.includes('location is not supported')) {
+          continue;
+        }
+
+        // If the error is a quota error (429), break model loop, try next key
+        if (status === 429 || msg.includes('429') || msg.toLowerCase().includes('quota')) {
+          console.warn(`[GEMINI-STREAM] Key ${activeKeyIndex + 1} exhausted. Moving to next key...`);
+          break; 
         }
         
-        // Otherwise try next model for the same key (e.g. for 404s)
+        // Otherwise try next model for the same key
         continue;
       }
     }
