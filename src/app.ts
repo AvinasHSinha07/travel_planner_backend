@@ -1,5 +1,5 @@
 import * as Sentry from '@sentry/node';
-import express, { Application, Request, Response } from 'express';
+import express, { Application, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
@@ -66,7 +66,30 @@ app.use(helmet({
   // Sentry needs some headers for profiling/tracing if enabled
   crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" },
 }));
+app.use(cors({
+  origin: function (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    // Allow localhost variations in development
+    if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
+      return callback(null, true);
+    }
+    
+    if (allowedOrigins.includes(origin) || origin.endsWith('.vercel.app')) {
+      return callback(null, true);
+    }
+    
+    return callback(new Error('Not allowed by CORS'));
+  },
+  credentials: true,
+}));
+
+// Parsers
 app.use(cookieParser());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
 app.use(pino({
   transport: process.env.NODE_ENV === 'development' ? {
     target: 'pino-pretty',
@@ -86,14 +109,11 @@ app.post(
   BookingController.stripeWebhook,
 );
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
 // Security Middlewares
 const SELF_ASSIGNABLE_ROLES = new Set(['USER', 'TRAVEL_AGENT']);
 
 app.use('/api/v1/auth', authRouteLimiter);
-app.use('/api/v1/auth', (req, res, next) => {
+app.use('/api/v1/auth', (req: Request, res: Response, next: NextFunction) => {
   if (req.method !== 'POST' || !req.path.includes('sign-up')) {
     return next();
   }
@@ -119,7 +139,7 @@ app.get('/', (req: Request, res: Response) => {
 });
 
 // Sentry Debug Route
-app.get("/debug-sentry", function mainHandler(req, res) {
+app.get("/debug-sentry", function mainHandler(req: Request, res: Response) {
   throw new Error("My first Sentry error!");
 });
 

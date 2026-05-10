@@ -13,6 +13,7 @@ const listAccommodationsFromDB = async (q: {
   sortOrder: 'asc' | 'desc';
   search?: string;
   type?: AccommodationType;
+  isManagement?: string;
 }, user?: any) => {
   const take = Math.min(Math.max(q.limit, 1), 100);
   const skip = (Math.max(q.page, 1) - 1) * take;
