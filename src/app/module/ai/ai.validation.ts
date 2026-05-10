@@ -31,4 +31,15 @@ export const AIValidation = {
       history: chatHistorySchema.optional(),
     }),
   }),
+  generateContentSchema: z.object({
+    body: z.object({
+      type: z.enum(['destination', 'activity', 'accommodation']),
+      context: z.object({
+        name: z.string(),
+        location: z.string().optional(),
+        destinationName: z.string().optional(),
+        isEdit: z.boolean().optional(),
+      }),
+    }),
+  }),
 };

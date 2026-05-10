@@ -58,11 +58,13 @@ router.post(
   AIController.captionImage,
 );
 
-// Legacy route for backward compatibility
+// Feature 7: AI Content Generation
+// POST /api/v1/ai/generate-content
 router.post(
-  '/generate/:tripId',
-  requireAuth(Role.USER, Role.ADMIN, Role.TRAVEL_AGENT),
-  AIController.generateTripItinerary,
+  '/generate-content',
+  requireAuth(Role.ADMIN, Role.TRAVEL_AGENT),
+  validateRequest(AIValidation.generateContentSchema),
+  AIController.generateContent,
 );
 
 export const AIRoutes = router;

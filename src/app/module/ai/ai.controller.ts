@@ -91,6 +91,19 @@ const captionImage = catchAsync(async (req, res) => {
   });
 });
 
+// Feature 7: Generate Content
+const generateContent = catchAsync(async (req, res) => {
+  const { type, context } = req.body;
+  const result = await AIService.generateContent(type, context);
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: 'AI content generated',
+    data: result,
+  });
+});
+
 export const AIController = {
   generateTripItinerary,
   getRecommendations,
@@ -99,4 +112,5 @@ export const AIController = {
   analyzeData,
   categorize,
   captionImage,
+  generateContent,
 };

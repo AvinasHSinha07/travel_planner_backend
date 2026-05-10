@@ -701,6 +701,60 @@ const captionImage = async (imageUrl: string): Promise<CaptionResult> => {
 };
 
 // ============================================================================
+// Feature 7: AI Content Generation (Descriptions & Summaries)
+// ============================================================================
+interface GeneratedContent {
+  description: string;
+  summary: string;
+  category?: string;
+  tags?: string[];
+}
+
+const generateContent = async (
+  type: 'destination' | 'activity' | 'accommodation',
+  context: { name: string; location?: string; destinationName?: string }
+): Promise<GeneratedContent> => {
+  let typePrompt = '';
+  if (type === 'destination') {
+    typePrompt = 'Highlight the overall vibe, best things to do, and why it is a great travel spot.';
+  } else if (type === 'activity') {
+    typePrompt = 'Describe the experience, what to expect, and any tips for participants.';
+  } else if (type === 'accommodation') {
+    typePrompt = 'Describe the ambiance, key features, and what makes it a comfortable stay.';
+  }
+
+  const prompt = `
+    Generate a professional and enticing travel platform description and summary for the following ${type}:
+    Name: ${context.name}
+    ${context.location ? `Location: ${context.location}` : ''}
+    ${context.destinationName ? `Located in: ${context.destinationName}` : ''}
+
+    ${typePrompt}
+
+    Return ONLY a JSON object in this exact format:
+    {
+      "description": "A detailed 3-4 sentence description highlighting unique selling points.",
+      "summary": "A concise 1-sentence summary for quick viewing.",
+      "category": "One most appropriate category (e.g., Luxury, Adventure, Beach, Urban)",
+      "tags": ["tag1", "tag2", "tag3", "tag4", "tag5"]
+    }
+  `;
+
+  try {
+    const text = await callGeminiWithFallback(prompt);
+    return extractJSONFromResponse(text);
+  } catch (error) {
+    console.error(`AI Content Generation failed for ${type}:`, error);
+    return {
+      description: `Discover the wonders of ${context.name}. A must-visit experience in ${context.location || context.destinationName || 'this region'}.`,
+      summary: `${context.name}: An incredible ${type} to explore.`,
+      category: 'General',
+      tags: [type, 'travel', 'exploration']
+    };
+  }
+};
+
+// ============================================================================
 // Export Service
 // ============================================================================
 export const AIService = {
@@ -711,4 +765,5 @@ export const AIService = {
   analyzeData,
   categorize,
   captionImage,
+  generateContent,
 };
