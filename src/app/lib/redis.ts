@@ -2,7 +2,8 @@ import Redis from 'ioredis';
 import { env } from '../config/env';
 
 export const redis = new Redis(env.REDIS_URL || 'redis://localhost:6379', {
-  maxRetriesPerRequest: 3,
+  // BullMQ requires this to be null for blocking Redis commands used by workers.
+  maxRetriesPerRequest: null,
   enableReadyCheck: true,
 });
 

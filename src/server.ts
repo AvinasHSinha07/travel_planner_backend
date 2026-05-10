@@ -1,15 +1,7 @@
-import * as Sentry from '@sentry/node';
 import app from './app';
 import { env } from './app/config/env';
+import './workers/ai.worker';
 
-if (env.SENTRY_DSN) {
-  Sentry.init({
-    dsn: env.SENTRY_DSN,
-    environment: env.NODE_ENV,
-    tracesSampleRate: env.NODE_ENV === 'production' ? 0.12 : 0,
-    sendDefaultPii: false,
-  });
-}
 
 async function bootstrap() {
   try {

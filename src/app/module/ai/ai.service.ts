@@ -420,6 +420,19 @@ interface AnalyticsInsight {
 
 type DatasetType = 'user-trips' | 'spending-patterns' | 'destination-trends' | 'booking-analytics';
 
+/**
+ * Prisma raw aggregates can contain BigInt/Date values, which break plain JSON.stringify
+ * when building prompts. Normalize to JSON-safe values first.
+ */
+const toJsonSafe = <T>(value: T): T =>
+  JSON.parse(
+    JSON.stringify(value, (_key, v) => {
+      if (typeof v === 'bigint') return Number(v);
+      if (v instanceof Date) return v.toISOString();
+      return v;
+    }),
+  ) as T;
+
 const analyzeData = async (dataset: DatasetType): Promise<AnalyticsInsight> => {
   // Check cache
   const cacheKey = CacheKeys.ai.analysis(dataset);
@@ -506,7 +519,7 @@ const analyzeData = async (dataset: DatasetType): Promise<AnalyticsInsight> => {
     Analyze the following travel platform data and provide actionable insights.
     
     Dataset: ${context}
-    Data: ${JSON.stringify(data)}
+    Data: ${JSON.stringify(toJsonSafe(data))}
     
     Provide analysis in this JSON format:
     {

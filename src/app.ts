@@ -1,3 +1,4 @@
+import * as Sentry from '@sentry/node';
 import express, { Application, Request, Response } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -62,6 +63,8 @@ app.use(helmet({
   },
   crossOriginResourcePolicy: { policy: 'cross-origin' },
   crossOriginEmbedderPolicy: false,
+  // Sentry needs some headers for profiling/tracing if enabled
+  crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" },
 }));
 app.use(cookieParser());
 app.use(pino({
@@ -115,6 +118,11 @@ app.get('/', (req: Request, res: Response) => {
   });
 });
 
+// Sentry Debug Route
+app.get("/debug-sentry", function mainHandler(req, res) {
+  throw new Error("My first Sentry error!");
+});
+
 // Debug endpoint to check auth status
 app.get('/api/v1/debug/auth', async (req: Request, res: Response) => {
   const { fromNodeHeaders } = await import('better-auth/node');
@@ -136,7 +144,18 @@ app.get('/api/v1/debug/auth', async (req: Request, res: Response) => {
 // 404 Handler
 app.use(notFound);
 
+// The error handler must be registered before any other error middleware and after all controllers
+Sentry.setupExpressErrorHandler(app);
+
+// Optional fallthrough error handler
+app.use(function onError(err: any, req: Request, res: Response, next: any) {
+  if (res.statusCode < 400) res.statusCode = 500;
+  // res.sentry is often attached by the error handler in some versions
+  res.end((res as any).sentry + "\n");
+});
+
 // Global Error Handler
 app.use(globalErrorHandler);
+
 
 export default app;

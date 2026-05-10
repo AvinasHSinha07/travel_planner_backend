@@ -24,7 +24,9 @@ router.post(
 );
 
 // Feature 3: AI Travel Chat Assistant (Public - no auth required, but auth-aware)
-// POST /api/v1/ai/chat
+// POST /api/v1/ai/chat/stream — SSE token stream (Gemini)
+router.post('/chat/stream', AIController.chatStream);
+// POST /api/v1/ai/chat — single JSON reply
 router.post(
   '/chat',
   AIController.chat,

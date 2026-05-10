@@ -109,7 +109,8 @@ const updateMyProfileInDB = async (userId: string, payload: any) => {
 };
 
 const getDashboardStatsFromDB = async (userId: string, role: string) => {
-  if (role === 'ADMIN') {
+  /** Staff overview: same aggregates the main dashboard cards expect for ADMIN + TRAVEL_AGENT */
+  if (role === Role.ADMIN || role === Role.TRAVEL_AGENT) {
     const [totalUsers, totalDestinations, totalBookings, totalRevenue] = await Promise.all([
       prisma.user.count(),
       prisma.destination.count(),

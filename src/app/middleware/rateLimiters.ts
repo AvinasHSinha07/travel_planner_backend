@@ -49,7 +49,7 @@ const rateOpts = {
 export const authRouteLimiter = rateLimit({
   ...rateOpts,
   windowMs: 15 * 60 * 1000,
-  max: 20,
+  max: 100,
   skip: (req) => skipOptions(req) || isAuthSessionRead(req),
   store: authStore,
   message: { success: false, message: 'Too many auth attempts, please try again later.' },
@@ -59,7 +59,7 @@ export const authRouteLimiter = rateLimit({
 export const generalApiLimiter = rateLimit({
   ...rateOpts,
   windowMs: 15 * 60 * 1000,
-  max: 100,
+  max: 1000,
   skip: (req) => skipOptions(req) || req.path.startsWith('/auth'),
   store: generalStore,
   message: { success: false, message: 'Too many requests, please slow down.' },
@@ -69,7 +69,7 @@ export const generalApiLimiter = rateLimit({
 export const aiRouteLimiter = rateLimit({
   ...rateOpts,
   windowMs: 60 * 1000,
-  max: 20,
+  max: 60,
   skip: skipOptions,
   store: aiStore,
   message: { success: false, message: 'AI rate limit exceeded, try again in a minute.' },
