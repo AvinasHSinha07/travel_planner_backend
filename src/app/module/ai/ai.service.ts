@@ -401,8 +401,13 @@ User: ${message}
       try {
         console.log(`[GEMINI-STREAM] Attempting ${modelId} with Key ${activeKeyIndex + 1}/${apiKeys.length}`);
         const model = currentGenAI.getGenerativeModel({ model: modelId });
-        const streamResult = await model.generateContentStream(prompt);
         
+        // Use a timeout for the stream request to avoid hanging
+        const streamResult = await Promise.race([
+          model.generateContentStream(prompt),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Stream request timeout')), 10000))
+        ]) as any;
+
         let started = false;
         for await (const chunk of streamResult.stream) {
           if (!started) {
@@ -417,14 +422,24 @@ User: ${message}
             res.write(`data: ${JSON.stringify({ text })}\n\n`);
           }
         }
-        res.write('data: [DONE]\n\n');
-        res.end();
-        setCurrentKeyIndex(activeKeyIndex);
-        return; // Success!
+
+        if (started) {
+          res.write('data: [DONE]\n\n');
+          res.end();
+          setCurrentKeyIndex(activeKeyIndex);
+          return; // Success!
+        }
       } catch (error: any) {
         lastError = error;
-        console.warn(`[GEMINI-STREAM] ${modelId} (Key ${activeKeyIndex + 1}) failed:`, error.message);
-        // Continue to next model if we haven't started sending data yet
+        const msg = error?.message || 'Unknown error';
+        console.warn(`[GEMINI-STREAM] ${modelId} (Key ${activeKeyIndex + 1}) failed:`, msg);
+
+        // If the error is a quota error (429), we might want to try the next key immediately for this model
+        if (msg.includes('429') || msg.toLowerCase().includes('quota')) {
+          break; // Break model loop, try next key
+        }
+        
+        // Otherwise try next model for the same key (e.g. for 404s)
         continue;
       }
     }

@@ -13,27 +13,26 @@ export const setCurrentKeyIndex = (index: number) => {
 
 console.log(`[GEMINI] Multi-key rotation initialized with ${apiKeys.length} keys.`);
 
-// Model IDs: Using most stable models for production
+// Model IDs: Prioritizing stability and latest available versions
 export const MODELS = {
   flash: [
-    'gemini-3.1-flash-lite',
-    'gemini-3.1-flash-lite-preview',
-    'gemini-3.1-flash-live-preview',
-    'gemini-3-flash-preview',
-    'gemini-2.5-flash',
-    'gemini-2.5-flash-lite',
-    'gemini-2.0-flash',
-    'gemini-2.0-flash-lite',
+    'gemini-1.5-flash-latest',
+    'gemini-2.0-flash-exp',
+    'gemini-2.0-flash-lite-preview-02-05',
     'gemini-1.5-flash',
+    'gemini-1.5-flash-8b-latest',
+    'gemini-3.1-flash-lite',
+    'gemini-2.5-flash-lite',
   ],
   pro: [
-    'gemini-2.5-pro',
-    'gemini-1.5-pro',
+    'gemini-1.5-pro-latest',
     'gemini-2.0-pro-exp-02-05',
+    'gemini-1.5-pro',
+    'gemini-2.5-pro',
   ],
 };
 
-// Helper to get a GoogleGenerativeAI instance with a specific key index
+
 export const getGenAIInstance = (index: number) => {
   const key = apiKeys[index] || apiKeys[0] || '';
   return new GoogleGenerativeAI(key);
