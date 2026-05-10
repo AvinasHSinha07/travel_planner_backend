@@ -11,6 +11,8 @@ export const setCurrentKeyIndex = (index: number) => {
   currentKeyIndex = index;
 };
 
+console.log(`[GEMINI] Multi-key rotation initialized with ${apiKeys.length} keys.`);
+
 // Model IDs: Using most stable models for production
 export const MODELS = {
   flash: [
