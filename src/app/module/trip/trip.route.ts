@@ -33,10 +33,9 @@ router.patch(
   TripController.updateTrip,
 );
 
-// TRAVEL_AGENT is intentionally excluded: agents use admin tooling or support channels to remove trips.
 router.delete(
   '/:id',
-  requireAuth(Role.USER, Role.ADMIN),
+  requireAuth(Role.USER, Role.ADMIN, Role.TRAVEL_AGENT),
   TripController.deleteTrip,
 );
 

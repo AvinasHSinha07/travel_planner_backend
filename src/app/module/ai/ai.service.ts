@@ -493,6 +493,15 @@ const analyzeData = async (dataset: DatasetType): Promise<AnalyticsInsight> => {
       throw new Error('Unknown dataset type');
   }
 
+  if (!data || (Array.isArray(data) && data.length === 0)) {
+    return {
+      insights: ['No sufficient data collected for this period yet.'],
+      trends: ['Data collection in progress'],
+      budgetTips: ['Wait for more bookings to see spending trends'],
+      summary: 'Insufficient data for a meaningful analysis at this stage.',
+    };
+  }
+
   const prompt = `
     Analyze the following travel platform data and provide actionable insights.
     

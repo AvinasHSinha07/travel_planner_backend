@@ -30,12 +30,10 @@ const saveDestinationForUser = async (userId: string, destinationId: string) => 
 };
 
 const removeSavedDestinationForUser = async (userId: string, destinationId: string) => {
-  const result = await prisma.savedDestination.deleteMany({
+  /** Idempotent: client optimistic state can get out of sync; treat missing row as already removed. */
+  await prisma.savedDestination.deleteMany({
     where: { userId, destinationId },
   });
-  if (result.count === 0) {
-    throw new AppError(httpStatus.NOT_FOUND, 'Saved destination not found');
-  }
 };
 
 const listSavedDestinationIdsForUser = async (userId: string) => {

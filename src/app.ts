@@ -9,12 +9,12 @@ import router from './app/routes';
 import pino from 'pino-http';
 import { toNodeHandler } from "better-auth/node";
 import { auth } from './app/lib/auth';
-import { env } from './app/config/env';
+import { env, trustProxyExpress } from './app/config/env';
 import { authRouteLimiter, generalApiLimiter } from './app/middleware/rateLimiters';
 import { BookingController } from './app/module/booking/booking.controller';
 
 const app: Application = express();
-app.set('trust proxy', true);
+app.set('trust proxy', trustProxyExpress);
 
 // Middlewares
 const envOrigins = process.env.CLIENT_URL?.split(',') || [];

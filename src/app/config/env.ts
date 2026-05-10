@@ -6,6 +6,8 @@ dotenv.config();
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.string().default('5000'),
+  /** Number of reverse-proxy hops (0 = off). Unset: dev=false, prod=1. See express-rate-limit trust proxy docs. */
+  TRUST_PROXY_HOPS: z.string().optional(),
   DATABASE_URL: z.string(),
   REDIS_URL: z.string(),
   BETTER_AUTH_SECRET: z.string(),
@@ -46,5 +48,19 @@ if (cloudinarySetCount !== 0 && cloudinarySetCount !== 3) {
 }
 
 export const env = parsed;
+
+/** Express `trust proxy` and express-rate-limit `trustProxy` (boolean `true` is rejected by rate-limit v8). */
+function resolveTrustProxyHops(): number | false {
+  const raw = parsed.TRUST_PROXY_HOPS?.trim();
+  if (raw !== undefined && raw !== '') {
+    const n = Number(raw);
+    if (!Number.isFinite(n) || n <= 0) return false;
+    return Math.min(5, Math.floor(n));
+  }
+  return parsed.NODE_ENV === 'production' ? 1 : false;
+}
+
+export const trustProxyExpress = resolveTrustProxyHops();
+export const trustProxyForRateLimit: number | false = trustProxyExpress;
 
 export const isCloudinaryConfigured = (): boolean => cloudinarySetCount === 3;

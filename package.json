@@ -6,6 +6,8 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/server.ts",
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
     "build": "prisma generate && tsc",
     "start": "node dist/server.js",
     "type-check": "tsc --noEmit",

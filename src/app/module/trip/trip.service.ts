@@ -30,9 +30,10 @@ const getMyTripsFromDB = async (userId: string) => {
   return result;
 };
 
-const getSingleTripFromDB = async (id: string, userId: string) => {
+const getSingleTripFromDB = async (id: string, userId: string, role: Role) => {
+  const staff = role === Role.ADMIN || role === Role.TRAVEL_AGENT;
   const result = await prisma.trip.findFirst({
-    where: { id, userId },
+    where: staff ? { id } : { id, userId },
     include: {
       destination: true,
       itineraryItems: {
@@ -41,18 +42,27 @@ const getSingleTripFromDB = async (id: string, userId: string) => {
       bookings: true,
     },
   });
+  if (!result) {
+    throw new AppError(httpStatus.NOT_FOUND, 'Trip not found');
+  }
   return result;
 };
 
-const updateTripInDB = async (id: string, userId: string, payload: any) => {
+const updateTripInDB = async (id: string, userId: string, role: Role, payload: any) => {
   const data: any = { ...payload };
   if (payload.startDate) data.startDate = new Date(payload.startDate);
   if (payload.endDate) data.endDate = new Date(payload.endDate);
 
-  const result = await prisma.trip.update({
-    where: { id, userId },
-    data,
-  });
+  const result =
+    role === Role.ADMIN
+      ? await prisma.trip.update({
+          where: { id },
+          data,
+        })
+      : await prisma.trip.update({
+          where: { id, userId },
+          data,
+        });
   await cache.invalidateTripItineraryAi(id);
   return result;
 };

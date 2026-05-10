@@ -30,8 +30,9 @@ const getMyTrips = catchAsync(async (req, res) => {
 
 const getSingleTrip = catchAsync(async (req, res) => {
   const userId = req.user?.id as string;
+  const role = req.user?.role as Role;
   const { id } = req.params;
-  const result = await TripService.getSingleTripFromDB(id as string, userId);
+  const result = await TripService.getSingleTripFromDB(id as string, userId, role);
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
@@ -43,8 +44,9 @@ const getSingleTrip = catchAsync(async (req, res) => {
 
 const updateTrip = catchAsync(async (req, res) => {
   const userId = req.user?.id as string;
+  const role = req.user?.role as Role;
   const { id } = req.params;
-  const result = await TripService.updateTripInDB(id as string, userId, req.body);
+  const result = await TripService.updateTripInDB(id as string, userId, role, req.body);
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
