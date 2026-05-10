@@ -20,6 +20,7 @@ const globalErrorHandler = (
   ];
 
   if (env.SENTRY_DSN && statusCode >= 500) {
+    console.log('[SENTRY] Manually capturing exception in globalErrorHandler');
     Sentry.captureException(err);
   }
 
