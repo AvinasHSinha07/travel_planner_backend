@@ -13,22 +13,22 @@ export const setCurrentKeyIndex = (index: number) => {
 
 console.log(`[GEMINI] Multi-key rotation initialized with ${apiKeys.length} keys.`);
 
-// Model IDs: Prioritizing stability and latest available versions (2026 Series)
+// Model IDs: Prioritizing stability and global availability (2026 Series)
 export const MODELS = {
   flash: [
-    'gemini-3.1-flash-lite',
-    'gemini-3.1-flash-lite-preview',
-    'gemini-3.1-flash-image-preview',
-    'gemini-2.5-flash',
-    'gemini-2.5-flash-lite',
-    'gemini-2.5-flash-preview',
+    'gemini-2.5-flash', // Verified working in user environment
+    'gemini-1.5-flash', 
     'gemini-2.0-flash',
+    'gemini-3.1-flash-image-preview',
+    'gemini-1.5-flash-8b',
+    'gemini-3.1-flash-lite',
     'gemini-2.0-flash-lite',
+    'gemini-2.5-flash-lite',
   ],
   pro: [
+    'gemini-1.5-pro',
     'gemini-3.1-pro-preview',
     'gemini-2.5-pro',
-    'gemini-1.5-pro',
   ],
 };
 
@@ -102,15 +102,20 @@ export async function callGeminiWithFallback(
         }
 
         // If it's a 400 (Bad Request) with "location not supported", try next model 
-        // (sometimes different models have different regional availability)
         if (message.includes('location is not supported')) {
           continue;
         }
 
-        // If it's a 429 (Quota), we should try the next key for the same model if possible,
-        // or just move to the next key entirely to save time.
+        // If it's a 429 (Quota)
         if (status === 429 || message.includes('429') || message.toLowerCase().includes('quota')) {
-          console.warn(`[GEMINI] Key ${activeKeyIndex + 1} exhausted. Moving to next key...`);
+          // Special case: if the limit is 0, it means this model is likely disabled or restricted for this region/key
+          // In this case, we SHOULD try the next model because other models might have a non-zero limit.
+          if (message.includes('limit: 0')) {
+            console.warn(`[GEMINI] ${modelId} has 0 limit. Trying next model...`);
+            continue;
+          }
+
+          console.warn(`[GEMINI] Key ${activeKeyIndex + 1} exhausted for ${modelId}. Moving to next key...`);
           break; // Break the model loop, try next key
         }
         
@@ -185,10 +190,11 @@ export async function captionTravelImageWithGemini(imageUrl: string): Promise<Ge
       
       // Try a few models that support vision (2026 Series)
       const visionModels = [
+        'gemini-1.5-flash',
+        'gemini-2.0-flash',
         'gemini-3.1-flash-image-preview',
-        'gemini-3.1-flash-lite',
         'gemini-2.5-flash',
-        'gemini-2.0-flash'
+        'gemini-3.1-flash-lite'
       ];
       
       for (const modelId of visionModels) {

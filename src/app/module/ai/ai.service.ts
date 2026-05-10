@@ -388,7 +388,7 @@ User: ${message}
 `;
 
   // Models to try for streaming
-  const modelIds = [...MODELS.flash, ...MODELS.pro];
+  const modelIds = [...MODELS.pro, ...MODELS.flash];
   let lastError: any = null;
 
   // Try each API key
@@ -452,8 +452,14 @@ User: ${message}
           continue;
         }
 
-        // If the error is a quota error (429), break model loop, try next key
+        // If the error is a quota error (429)
         if (status === 429 || msg.includes('429') || msg.toLowerCase().includes('quota')) {
+          // Special case: if the limit is 0, it means this model is likely disabled or restricted for this region/key
+          if (msg.includes('limit: 0')) {
+             console.warn(`[GEMINI-STREAM] ${modelId} has 0 limit. Trying next model...`);
+             continue;
+          }
+
           console.warn(`[GEMINI-STREAM] Key ${activeKeyIndex + 1} exhausted. Moving to next key...`);
           break; 
         }
@@ -599,20 +605,22 @@ const analyzeData = async (dataset: DatasetType): Promise<AnalyticsInsight> => {
   `;
 
   try {
+    console.log(`[AI-ANALYZE] Running ${dataset} analysis...`);
     const text = await callGeminiWithFallback(prompt, { usePro: true });
+    console.log(`[AI-ANALYZE] Received response from Gemini. Parsing...`);
     const analysis = extractJSONFromResponse(text);
     
     // Cache for 1 hour
     await cache.set(cacheKey, analysis, CacheTTL.VERY_LONG);
     
     return analysis;
-  } catch (error) {
-    console.error('AI Analysis failed:', error);
+  } catch (error: any) {
+    console.error(`[AI-ANALYZE] Failed for ${dataset}:`, error?.message || error);
     return {
       insights: ['Unable to generate insights at this time'],
       trends: [],
       budgetTips: [],
-      summary: 'Analysis temporarily unavailable',
+      summary: `Analysis temporarily unavailable: ${error?.message || 'Internal error'}`,
     };
   }
 };
