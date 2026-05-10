@@ -7,6 +7,11 @@ import {
   extractJSONFromResponse,
   geminiModel,
   captionTravelImageWithGemini,
+  MODELS,
+  apiKeys,
+  currentKeyIndex,
+  setCurrentKeyIndex,
+  getGenAIInstance,
 } from '../../utils/gemini';
 import { prisma } from '../../lib/prisma';
 import { cache, CacheKeys, CacheTTL } from '../../lib/redis';
@@ -82,12 +87,7 @@ const generateItinerary = async (tripId: string, requesterId: string, requesterR
     - Consider the travel style: ${preferences?.travelStyle || 'balanced'}
   `;
 
-  /** Long trips / very large prompts go async so the API stays responsive */
-  const shouldQueue = days > 5 || prompt.length > 12_000;
-  if (shouldQueue) {
-    const job = await queueJobs.generateItinerary(tripId, trip.userId, prompt);
-    return { status: 'queued', jobId: job.id, message: 'Itinerary generation queued' };
-  }
+  /** Itinerary generation now always runs synchronously as requested. */
 
   try {
     const text = await callGeminiWithFallback(prompt);
@@ -112,12 +112,13 @@ const generateItinerary = async (tripId: string, requesterId: string, requesterR
     });
 
     return itineraryData;
-  } catch (error) {
+  } catch (error: any) {
     console.error('AI Itinerary generation failed:', error);
-    throw new AppError(
-      httpStatus.SERVICE_UNAVAILABLE,
-      'AI itinerary is temporarily unavailable. Please try again in a few minutes or add activities manually.',
-    );
+    const message = error?.message?.includes('429') || error?.status === 429
+      ? 'AI quota exceeded for the day. Please try again tomorrow or add activities manually.'
+      : 'AI itinerary is temporarily unavailable. Please try again in a few minutes or add activities manually.';
+    
+    throw new AppError(httpStatus.SERVICE_UNAVAILABLE, message);
   }
 };
 
@@ -386,26 +387,57 @@ ${history.slice(-8).map((h) => `${h.role}: ${h.content}`).join('\n')}
 User: ${message}
 `;
 
-  res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-  (res as Response & { flushHeaders?: () => void }).flushHeaders?.();
+  // Models to try for streaming
+  const modelIds = [...MODELS.flash, ...MODELS.pro];
+  let lastError: any = null;
 
-  try {
-    const streamResult = await geminiModel.generateContentStream(prompt);
-    for await (const chunk of streamResult.stream) {
-      const text = chunk.text();
-      if (text) {
-        res.write(`data: ${JSON.stringify({ text })}\n\n`);
+  // Try each API key
+  for (let keyAttempt = 0; keyAttempt < apiKeys.length; keyAttempt++) {
+    const activeKeyIndex = (currentKeyIndex + keyAttempt) % apiKeys.length;
+    const currentGenAI = getGenAIInstance(activeKeyIndex);
+
+    // Try each model with this API key
+    for (const modelId of modelIds) {
+      try {
+        console.log(`[GEMINI-STREAM] Attempting ${modelId} with Key ${activeKeyIndex + 1}/${apiKeys.length}`);
+        const model = currentGenAI.getGenerativeModel({ model: modelId });
+        const streamResult = await model.generateContentStream(prompt);
+        
+        let started = false;
+        for await (const chunk of streamResult.stream) {
+          if (!started) {
+            res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+            res.setHeader('Cache-Control', 'no-cache');
+            res.setHeader('Connection', 'keep-alive');
+            (res as any).flushHeaders?.();
+            started = true;
+          }
+          const text = chunk.text();
+          if (text) {
+            res.write(`data: ${JSON.stringify({ text })}\n\n`);
+          }
+        }
+        res.write('data: [DONE]\n\n');
+        res.end();
+        setCurrentKeyIndex(activeKeyIndex);
+        return; // Success!
+      } catch (error: any) {
+        lastError = error;
+        console.warn(`[GEMINI-STREAM] ${modelId} (Key ${activeKeyIndex + 1}) failed:`, error.message);
+        // Continue to next model if we haven't started sending data yet
+        continue;
       }
     }
-    res.write('data: [DONE]\n\n');
-    res.end();
-  } catch (error) {
-    console.error('streamTravelChat', error);
-    res.write(`data: ${JSON.stringify({ error: 'stream_failed' })}\n\n`);
-    res.end();
   }
+
+  // If we get here, all models failed
+  console.error('streamTravelChat - All models failed', lastError);
+  const isQuotaError = lastError?.message?.includes('429') || lastError?.status === 429;
+  res.write(`data: ${JSON.stringify({ 
+    error: isQuotaError ? 'quota_exceeded' : 'stream_failed',
+    message: isQuotaError ? 'AI daily limit reached. Try again later.' : 'All AI models failed to respond.'
+  })}\n\n`);
+  res.end();
 };
 
 // ============================================================================

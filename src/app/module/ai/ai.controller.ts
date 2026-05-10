@@ -19,9 +19,7 @@ const generateTripItinerary = catchAsync(async (req, res) => {
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
-    message: result.status === 'queued' 
-      ? 'Itinerary generation queued' 
-      : 'Itinerary generated successfully by AI',
+    message: 'Itinerary generated successfully by AI',
     data: result,
   });
 });

@@ -1,53 +1,95 @@
 import { GoogleGenerativeAI, GenerativeModel } from '@google/generative-ai';
 import { env } from '../config/env';
 
-const genAI = new GoogleGenerativeAI(env.GEMINI_API_KEY || '');
+// Support multiple API keys for rotation
+export const apiKeys = (env.GEMINI_API_KEY || '').split(',').map(k => k.trim()).filter(Boolean);
+export let currentKeyIndex = 0;
+export const setCurrentKeyIndex = (index: number) => {
+  currentKeyIndex = index;
+};
 
-// Model IDs: https://ai.google.dev/gemini-api/docs/models (1.5 IDs return 404 on current API)
-const FLASH_MODEL = process.env.GEMINI_FLASH_MODEL?.trim() || 'gemini-2.5-flash';
-const PRO_MODEL = process.env.GEMINI_PRO_MODEL?.trim() || 'gemini-2.5-pro';
+export const genAI = new GoogleGenerativeAI(apiKeys[0] || '');
 
-export const geminiModel = genAI.getGenerativeModel({ model: FLASH_MODEL });
-export const geminiProModel = genAI.getGenerativeModel({ model: PRO_MODEL });
-export const geminiVisionModel = genAI.getGenerativeModel({ model: FLASH_MODEL });
+// Helper to get a GoogleGenerativeAI instance with a specific key index
+export const getGenAIInstance = (index: number) => {
+  const key = apiKeys[index] || apiKeys[0] || '';
+  return new GoogleGenerativeAI(key);
+};
 
-// Helper function with fallback
+// Model IDs: 2.5 is primary, with 2.0 and 1.5 as fallbacks
+export const MODELS = {
+  flash: [
+    process.env.GEMINI_FLASH_MODEL?.trim() || 'gemini-2.5-flash',
+    'gemini-2.0-flash-exp',
+    'gemini-1.5-flash',
+    'gemini-1.5-flash-8b',
+  ],
+  pro: [
+    process.env.GEMINI_PRO_MODEL?.trim() || 'gemini-2.5-pro',
+    'gemini-2.0-pro-exp',
+    'gemini-1.5-pro',
+  ],
+};
+
+// For backward compatibility, but these will use the first key
+export const geminiModel = new GoogleGenerativeAI(apiKeys[currentKeyIndex] || '').getGenerativeModel({ model: MODELS.flash[0] });
+export const geminiProModel = new GoogleGenerativeAI(apiKeys[currentKeyIndex] || '').getGenerativeModel({ model: MODELS.pro[0] });
+export const geminiVisionModel = new GoogleGenerativeAI(apiKeys[currentKeyIndex] || '').getGenerativeModel({ model: MODELS.flash[0] });
+
+// Helper function with fallback and key rotation
 export async function callGeminiWithFallback(
   prompt: string,
   options?: { 
     usePro?: boolean;
-    maxRetries?: number;
     jsonOutput?: boolean;
   }
 ): Promise<string> {
-  const { usePro = false, maxRetries = 2, jsonOutput = false } = options || {};
+  const { usePro = false } = options || {};
   
-  const models: GenerativeModel[] = usePro 
-    ? [geminiProModel, geminiModel] 
-    : [geminiModel, geminiProModel];
+  // Combine all models, prioritized by requested tier
+  const modelIds = usePro 
+    ? [...MODELS.pro, ...MODELS.flash] 
+    : [...MODELS.flash, ...MODELS.pro];
   
   let lastError: Error | null = null;
   
-  for (let attempt = 0; attempt < Math.min(models.length, maxRetries); attempt++) {
-    try {
-      const model = models[attempt];
-      const result = await model.generateContent(prompt);
-      const response = await result.response;
-      const text = response.text();
-      
-      if (!text || text.trim().length === 0) {
-        throw new Error('Empty response from Gemini');
+  // Try each API key
+  for (let keyAttempt = 0; keyAttempt < apiKeys.length; keyAttempt++) {
+    const activeKeyIndex = (currentKeyIndex + keyAttempt) % apiKeys.length;
+    const currentGenAI = new GoogleGenerativeAI(apiKeys[activeKeyIndex]);
+
+    // Try each model with this API key
+    for (const modelId of modelIds) {
+      try {
+        console.log(`[GEMINI] Attempting ${modelId} with Key ${activeKeyIndex + 1}/${apiKeys.length}`);
+        const model = currentGenAI.getGenerativeModel({ model: modelId });
+        const result = await model.generateContent(prompt);
+        const response = await result.response;
+        const text = response.text();
+        
+        if (!text || text.trim().length === 0) {
+          throw new Error(`Empty response from ${modelId}`);
+        }
+        
+        // Success! Update the current key index to the one that worked
+        setCurrentKeyIndex(activeKeyIndex);
+        return text;
+      } catch (error: any) {
+        lastError = error;
+        const message = error?.message || '';
+        
+        console.warn(`[GEMINI] ${modelId} (Key ${activeKeyIndex + 1}) failed:`, message);
+        
+        // If it's a 429 (Quota), we should still try other models because they might have different quotas
+        // If it's a 404 (Not Found), we definitely try the next one
+        continue;
       }
-      
-      return text;
-    } catch (error) {
-      lastError = error as Error;
-      console.warn(`Gemini attempt ${attempt + 1} failed:`, lastError.message);
-      // Continue to next model
     }
+    
+    console.warn(`[GEMINI] All models failed for Key ${activeKeyIndex + 1}. Trying next key...`);
   }
   
-  throw new Error(`All Gemini models failed. Last error: ${lastError?.message}`);
+  throw new Error(`All Gemini models and API keys failed. Last error: ${lastError?.message}`);
 }
 
 // Parse JSON from AI response
