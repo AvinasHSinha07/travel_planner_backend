@@ -66,25 +66,6 @@ app.use(helmet({
   // Sentry needs some headers for profiling/tracing if enabled
   crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" },
 }));
-app.use(cors({
-  origin: function (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) {
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
-    
-    // Allow localhost variations in development
-    if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
-      return callback(null, true);
-    }
-    
-    if (allowedOrigins.includes(origin) || origin.endsWith('.vercel.app')) {
-      return callback(null, true);
-    }
-    
-    return callback(new Error('Not allowed by CORS'));
-  },
-  credentials: true,
-}));
-
 // Parsers
 app.use(cookieParser());
 app.use(express.json());
