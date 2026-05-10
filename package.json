@@ -3,13 +3,12 @@
   "version": "1.0.0",
   "description": "",
   "main": "dist/server.js",
-  "type": "module",
   "scripts": {
-    "dev": "tsx watch --import ./src/instrument.ts src/server.ts",
+    "dev": "tsx watch src/server.ts",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
-    "build": "prisma generate && tsup src/server.ts src/instrument.ts --format esm --clean --minify --sourcemap --dts",
-    "start": "node --import ./dist/instrument.js dist/server.js",
+    "build": "prisma generate && tsc",
+    "start": "node dist/server.js",
     "type-check": "tsc --noEmit",
     "test": "echo \"Error: no test specified\" && exit 1",
     "test:ai-e2e": "tsx scripts/ai-gemini-smoke.ts"
@@ -48,7 +47,9 @@
     "rate-limit-redis": "^5.0.0",
     "stripe": "^22.1.1",
     "ws": "^8.20.0",
-    "zod": "^4.4.3"
+    "zod": "^4.4.3",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.3"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",
@@ -56,10 +57,7 @@
     "@types/pg": "^8.20.0",
     "@types/pino-http": "^5.8.4",
     "@types/ws": "^8.18.1",
-    "prisma": "^7.8.0",
-    "tsup": "^8.5.1",
-    "tsx": "^4.21.0",
-    "typescript": "^6.0.3"
+    "prisma": "^7.8.0"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

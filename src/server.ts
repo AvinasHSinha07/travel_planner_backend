@@ -1,3 +1,4 @@
+import './instrument';
 import app from './main-app';
 import { env } from './app/config/env';
 import './workers/ai.worker';
